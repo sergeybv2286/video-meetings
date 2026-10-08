@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
+import { PrismaService } from './../src/prisma/prisma.service.js';
 import { setupApp } from './../src/setup-app.js';
 
 describe('Auth + Meetings (e2e)', () => {
@@ -15,6 +16,7 @@ describe('Auth + Meetings (e2e)', () => {
     app = moduleRef.createNestApplication();
     setupApp(app);
     await app.init();
+    await app.get(PrismaService).user.deleteMany();
   });
 
   afterEach(() => app.close());

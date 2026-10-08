@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 export interface Meeting {
   id: string;
   title: string;
+  date: string;
+  participants: string[];
   ownerId: string;
   createdAt: string;
 }
@@ -19,12 +21,25 @@ export class MeetingsService {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  create(ownerId: string, title: string): Meeting {
+  /** Встреча пользователя по id; чужие встречи не видны. */
+  findOneByOwner(ownerId: string, id: string): Meeting | undefined {
+    return this.meetings.find(
+      (meeting) => meeting.id === id && meeting.ownerId === ownerId,
+    );
+  }
+
+  create(
+    ownerId: string,
+    input: { title: string; date?: string; participants?: string[] },
+  ): Meeting {
+    const createdAt = new Date().toISOString();
     const meeting: Meeting = {
       id: randomUUID(),
-      title: title.trim(),
+      title: input.title.trim(),
+      date: input.date ? new Date(input.date).toISOString() : createdAt,
+      participants: (input.participants ?? []).map((p) => p.trim()),
       ownerId,
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
     this.meetings.push(meeting);
     return meeting;

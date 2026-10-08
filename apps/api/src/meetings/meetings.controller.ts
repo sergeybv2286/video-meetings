@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard, type AuthRequest } from '../auth/jwt-auth.guard.js';
 import { CreateMeetingDto } from './meetings.dto.js';
 import { MeetingsService } from './meetings.service.js';
@@ -15,6 +24,13 @@ export class MeetingsController {
 
   @Post()
   create(@Req() req: AuthRequest, @Body() dto: CreateMeetingDto) {
-    return this.meetings.create(req.user.id, dto.title);
+    return this.meetings.create(req.user.id, dto);
+  }
+
+  @Get(':id')
+  findOne(@Req() req: AuthRequest, @Param('id') id: string) {
+    const meeting = this.meetings.findOneByOwner(req.user.id, id);
+    if (!meeting) throw new NotFoundException('Встреча не найдена');
+    return meeting;
   }
 }

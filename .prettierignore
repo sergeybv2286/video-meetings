@@ -7,3 +7,4 @@ coverage
 pnpm-lock.yaml
 next-env.d.ts
 .agents
+apps/api/src/generated

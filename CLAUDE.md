@@ -2,7 +2,7 @@
 
 Монорепозиторий на pnpm workspaces (`pnpm@12.9.1`, Node >= 22, см. `.nvmrc`).
 
-- `apps/web` — Next.js (App Router, Tailwind), порт 3000. См. `apps/web/CLAUDE.md`.
+- `apps/web` — Next.js (App Router, Tailwind, HeroUI), порт 3000. См. `apps/web/CLAUDE.md`.
 - `apps/api` — NestJS 12 (ESM), порт 3001. См. `apps/api/CLAUDE.md`.
 
 ## Команды (из корня)
@@ -10,7 +10,9 @@
 - `pnpm dev` — web и api параллельно; `dev:web`, `dev:api` — по отдельности
 - `pnpm build` (`build:web`, `build:api`)
 - `pnpm lint` — ESLint в web, oxlint в api
-- `pnpm typecheck`, `pnpm test`
+- `pnpm typecheck`, `pnpm test` (только unit-тесты пакетов)
+- `pnpm --filter api test:e2e` — e2e API; требует запущенный Postgres (`docker compose up -d`), использует отдельную БД `video_meetings_test`
+- `docker compose up -d` — Postgres 17 (`docker-compose.yml`, порт 5432, том `postgres_data`); параметры — `POSTGRES_*` в `.env` (см. `.env.example`), `docker compose down -v` удаляет данные
 - `pnpm format` / `pnpm format:check` — Prettier для всего репозитория
 - Команда для одного пакета: `pnpm --filter web <script>` / `pnpm --filter api <script>`
 
@@ -18,6 +20,10 @@
 
 - Исходники скиллов лежат в `.agents/skills/` (список — в `skills-lock.json`), а Claude Code читает их из `.claude/skills/` через симлинки на `.agents/skills/<имя>`.
 - При установке нового скилла добавьте симлинк: `ln -s ../../.agents/skills/<имя> .claude/skills/<имя>`. После этого перезапустите сессию Claude Code.
+
+## MCP
+
+- `.mcp.json` (в git) — MCP-серверы проекта. Подключён `playwright` (`npx @playwright/mcp@latest`): управление браузером для проверки веб-интерфейса. При первом запуске Claude Code попросит подтвердить сервер; после добавления перезапустите сессию.
 
 ## Соглашения
 
@@ -43,5 +49,7 @@
 
 ## Текущее состояние
 
-- Реализованы регистрация, вход (JWT) и встречи (создание и список).
-- Хранилище пользователей и встреч в памяти API, данные теряются при перезапуске. БД пока нет.
+- Реализованы регистрация, вход (JWT) и встречи (`POST /meetings` — title, date, participants[]; `GET /meetings`; `GET /meetings/:id` — 404, если нет или чужая).
+- Профиль пользователя: `/users/*` (просмотр, редактирование имени/email, смена пароля, удаление аккаунта, поиск).
+- Пользователи хранятся в Postgres через Prisma (`apps/api/prisma`), миграции в `apps/api/prisma/migrations`. Для работы API и e2e-тестов Postgres должен быть запущен (`docker compose up -d`).
+- Встречи хранятся в памяти API, данные теряются при перезапуске.
