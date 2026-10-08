@@ -47,6 +47,8 @@ export interface AuthResult {
 export interface Meeting {
   id: string;
   title: string;
+  date: string;
+  participants: string[];
   createdAt: string;
 }
 

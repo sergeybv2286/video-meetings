@@ -2,7 +2,17 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type SubmitEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import {
+  Button,
+  Card,
+  FieldError,
+  Form,
+  Input,
+  Label,
+  TextField,
+} from '@heroui/react';
+import { AppTitle } from '@/components/app-title';
 import { api, ApiError } from '@/lib/api';
 import { saveSession, useSession } from '@/lib/session';
 
@@ -43,7 +53,7 @@ export function AuthForm({ mode }: Props) {
     if (session) router.replace('/');
   }, [session, router]);
 
-  async function onSubmit(event: SubmitEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const email = String(form.get('email'));
@@ -64,57 +74,65 @@ export function AuthForm({ mode }: Props) {
   if (loading || session) return null;
 
   return (
-    <main className="flex flex-1 items-center justify-center px-4">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-black/10 p-6 shadow-sm dark:border-white/15"
-      >
-        <h1 className="text-2xl font-semibold">{text.title}</h1>
+    <main className="flex flex-1 flex-col items-center justify-center gap-6 px-4">
+      <AppTitle />
+      <Card className="w-full max-w-sm">
+        <Card.Header>
+          <Card.Title>{text.title}</Card.Title>
+        </Card.Header>
+        <Card.Content>
+          <Form onSubmit={onSubmit} className="space-y-4">
+            <TextField
+              name="email"
+              type="email"
+              isRequired
+              autoComplete="email"
+            >
+              <Label>Email</Label>
+              <Input />
+              <FieldError />
+            </TextField>
 
-        <label className="block space-y-1">
-          <span className="text-sm">Email</span>
-          <input
-            name="email"
-            type="email"
-            required
-            autoComplete="email"
-            className="w-full rounded-md border border-black/20 bg-transparent px-3 py-2 dark:border-white/25"
-          />
-        </label>
+            <TextField
+              name="password"
+              type="password"
+              isRequired
+              minLength={6}
+              autoComplete={text.autocomplete}
+            >
+              <Label>Пароль</Label>
+              <Input />
+              <FieldError />
+            </TextField>
 
-        <label className="block space-y-1">
-          <span className="text-sm">Пароль</span>
-          <input
-            name="password"
-            type="password"
-            required
-            minLength={6}
-            autoComplete={text.autocomplete}
-            className="w-full rounded-md border border-black/20 bg-transparent px-3 py-2 dark:border-white/25"
-          />
-        </label>
+            {error && (
+              <p role="alert" className="text-sm text-danger">
+                {error}
+              </p>
+            )}
 
-        {error && (
-          <p role="alert" className="text-sm text-red-600">
-            {error}
+            <Button
+              type="submit"
+              isPending={pending}
+              fullWidth
+              className="min-h-11"
+            >
+              {pending ? 'Подождите…' : text.submit}
+            </Button>
+          </Form>
+        </Card.Content>
+        <Card.Footer>
+          <p className="text-sm">
+            {text.altText}{' '}
+            <Link
+              href={text.altHref}
+              className="inline-flex min-h-11 items-center font-medium text-accent underline underline-offset-4 transition-colors hover:opacity-80 focus-visible:rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              {text.altLink}
+            </Link>
           </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={pending}
-          className="w-full rounded-md bg-foreground px-3 py-2 text-background disabled:opacity-60"
-        >
-          {pending ? 'Подождите…' : text.submit}
-        </button>
-
-        <p className="text-sm">
-          {text.altText}{' '}
-          <Link href={text.altHref} className="underline">
-            {text.altLink}
-          </Link>
-        </p>
-      </form>
+        </Card.Footer>
+      </Card>
     </main>
   );
 }
