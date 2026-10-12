@@ -14,6 +14,7 @@ import {
   MeetingFileStorage,
   type StoredFileInfo,
 } from './meeting-file.storage.js';
+import { MeetingFileAbsentGuard } from './meeting-file-absent.guard.js';
 import { MeetingFilesService } from './meeting-files.service.js';
 import { MeetingOwnerGuard } from './meeting-owner.guard.js';
 
@@ -23,6 +24,7 @@ export class MeetingFilesController {
   constructor(private readonly files: MeetingFilesService) {}
 
   @Post()
+  @UseGuards(MeetingFileAbsentGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: new MeetingFileStorage(),

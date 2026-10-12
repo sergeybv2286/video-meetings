@@ -89,6 +89,20 @@ describe('MeetingFilesService', () => {
     expect(await readdir(path.join(dir, 'files'))).toEqual([]);
   });
 
+  it('create: сбой удаления файла не перекрывает исходную ошибку (409)', async () => {
+    const error = new Prisma.PrismaClientKnownRequestError('dup', {
+      code: 'P2002',
+      clientVersion: 'test',
+    });
+    const create = vi.fn().mockRejectedValue(error);
+    // storageKey вне хранилища: resolveStoragePath бросает при очистке
+    const outside = { ...storedFile, storageKey: '../outside' };
+
+    await expect(
+      makeService({ create }).create(meetingId, outside),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
   it('findByMeeting возвращает метаданные', async () => {
     const findUnique = vi.fn().mockResolvedValue(row);
     const dto = await makeService({ findUnique }).findByMeeting(meetingId);

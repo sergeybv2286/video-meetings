@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { rm } from 'node:fs/promises';
@@ -12,6 +13,8 @@ import { toMeetingFileDto, type MeetingFileDto } from './meeting-files.dto.js';
 
 @Injectable()
 export class MeetingFilesService {
+  private readonly logger = new Logger(MeetingFilesService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /** Сохраняет метаданные уже записанного на диск файла. */
@@ -31,7 +34,7 @@ export class MeetingFilesService {
       });
       return toMeetingFileDto(created);
     } catch (error) {
-      await rm(resolveStoragePath(file.storageKey), { force: true });
+      await this.removeFromDisk(file.storageKey);
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
@@ -48,5 +51,19 @@ export class MeetingFilesService {
     });
     if (!file) throw new NotFoundException('Файл не найден');
     return toMeetingFileDto(file);
+  }
+
+  async exists(meetingId: string): Promise<boolean> {
+    const count = await this.prisma.meetingFile.count({ where: { meetingId } });
+    return count > 0;
+  }
+
+  /** Сбой удаления не должен перекрывать исходную ошибку; остаток подчистит очистка сирот. */
+  private async removeFromDisk(storageKey: string): Promise<void> {
+    try {
+      await rm(resolveStoragePath(storageKey), { force: true });
+    } catch (error) {
+      this.logger.error(`Не удалось удалить файл ${storageKey}`, error);
+    }
   }
 }
