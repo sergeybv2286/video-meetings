@@ -17,3 +17,6 @@ pnpm-debug.log*
 
 # Сгенерированный Prisma Client
 apps/api/src/generated
+
+# Хранилище файлов встреч
+apps/api/storage

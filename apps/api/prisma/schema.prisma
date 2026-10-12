@@ -17,3 +17,22 @@ model User {
 
   @@map("users")
 }
+
+enum MeetingFileStatus {
+  UPLOADED
+
+  @@map("meeting_file_status")
+}
+
+model MeetingFile {
+  id           String            @id @default(uuid()) @db.Uuid
+  meetingId    String            @unique @map("meeting_id") @db.Uuid
+  originalName String            @map("original_name")
+  mimeType     String            @map("mime_type")
+  size         Int
+  status       MeetingFileStatus @default(UPLOADED)
+  storageKey   String            @map("storage_key")
+  uploadedAt   DateTime          @default(now()) @map("uploaded_at")
+
+  @@map("meeting_files")
+}
