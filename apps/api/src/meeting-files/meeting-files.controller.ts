@@ -15,7 +15,7 @@ import {
   MeetingFileStorage,
   type StoredFileInfo,
 } from './meeting-file.storage.js';
-import { DEFAULT_MAX_FILE_SIZE } from './meeting-file.types.js';
+import { MAX_FILE_SIZE_CAP } from './meeting-file.types.js';
 import { MeetingFileSizeGuard } from './meeting-file-size.guard.js';
 import { MeetingFileUploadFilter } from './meeting-file-upload.filter.js';
 import { MeetingFileAbsentGuard } from './meeting-file-absent.guard.js';
@@ -33,7 +33,7 @@ export class MeetingFilesController {
   @UseInterceptors(
     FileInterceptor('file', {
       storage: new MeetingFileStorage(),
-      limits: { files: 1, fields: 0, fileSize: DEFAULT_MAX_FILE_SIZE },
+      limits: { files: 1, fields: 0, fileSize: MAX_FILE_SIZE_CAP },
       // Исходные имена приходят в UTF-8 (кириллица и т. п.).
       defParamCharset: 'utf8',
     }),

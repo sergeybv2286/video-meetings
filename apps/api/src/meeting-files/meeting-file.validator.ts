@@ -28,9 +28,13 @@ export function resolveAllowedType(fileName: string): AllowedType {
   return type;
 }
 
-/** Бинарный файл с NUL-байтом не может быть текстом. */
+/** Бинарный файл с NUL-байтом не может быть текстом (UTF-16 с BOM — допустимое исключение). */
 function assertLooksLikeText(buffer: Buffer): void {
-  if (buffer.includes(0)) throw mismatch();
+  const utf16Bom =
+    buffer.length >= 2 &&
+    ((buffer[0] === 0xff && buffer[1] === 0xfe) ||
+      (buffer[0] === 0xfe && buffer[1] === 0xff));
+  if (!utf16Bom && buffer.includes(0)) throw mismatch();
 }
 
 /** Этап 1 (по первому чанку, до продолжения записи): сигнатура должна подходить расширению. */
@@ -39,8 +43,10 @@ export async function validatePrefix(
   type: AllowedType,
 ): Promise<void> {
   if (type.kind === 'text') return assertLooksLikeText(prefix);
-  const detected = await fileTypeFromBuffer(prefix);
-  if (!detected || !type.detected.includes(detected.mime)) throw mismatch();
+  // Начало файла может быть недостаточным для определения (например, большой ID3-тег
+  // у mp3): неопределённый результат не отклоняем, решает этап 2 по всему файлу.
+  const detected = await fileTypeFromBuffer(prefix).catch(() => undefined);
+  if (detected && !type.detected.includes(detected.mime)) throw mismatch();
 }
 
 /** Этап 2 (на готовом tmp-файле, до `rename`): полное определение и проверка архива OOXML. */

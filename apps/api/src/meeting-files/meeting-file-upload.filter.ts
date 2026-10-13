@@ -37,15 +37,17 @@ function translate(exception: HttpException): HttpException {
 export class MeetingFileUploadFilter implements ExceptionFilter {
   catch(exception: HttpException, host: ArgumentsHost): void {
     const result = translate(exception);
-    const body = result.getResponse();
+    const body = result === exception ? exception.getResponse() : undefined;
     host
       .switchToHttp()
       .getResponse<Response>()
       .status(result.getStatus())
       .json(
-        typeof body === 'string'
-          ? { statusCode: result.getStatus(), message: body }
-          : { ...body, message: result.message },
+        body !== undefined
+          ? typeof body === 'string'
+            ? { statusCode: result.getStatus(), message: body }
+            : body
+          : { ...(result.getResponse() as object), message: result.message },
       );
   }
 }

@@ -3,10 +3,13 @@ import { extname } from 'node:path';
 /** Лимит размера файла встречи: 500 МБ (`MEETING_FILE_MAX_SIZE` в байтах переопределяет — для тестов). */
 export const DEFAULT_MAX_FILE_SIZE = 500 * 1024 * 1024;
 
+/** Верхняя граница лимита: колонка `size` в БД — Int (2^31 − 1). */
+export const MAX_FILE_SIZE_CAP = 2_147_483_647;
+
 export function getMaxFileSize(): number {
   const value = Number(process.env.MEETING_FILE_MAX_SIZE);
   return Number.isSafeInteger(value) && value > 0
-    ? value
+    ? Math.min(value, MAX_FILE_SIZE_CAP)
     : DEFAULT_MAX_FILE_SIZE;
 }
 

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createWriteStream } from 'node:fs';
-import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { finished } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
@@ -79,8 +79,10 @@ export class MeetingFileStorage implements StorageEngine {
     out.on('error', (error) => {
       writeError = error;
     });
+    let size = 0;
     try {
       for await (const chunk of guardStream(file.stream, type)) {
+        size += chunk.length;
         if (writeError) throw writeError;
         if (!out.write(chunk)) await once(out, 'drain');
       }
@@ -95,7 +97,6 @@ export class MeetingFileStorage implements StorageEngine {
       await rm(tmpPath, { force: true });
       throw error;
     }
-    const { size } = await stat(resolveStoragePath(storageKey));
     return { storageKey, size, mimetype: type.mime, originalname };
   }
 }

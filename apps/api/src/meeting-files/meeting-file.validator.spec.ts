@@ -90,4 +90,23 @@ describe('meeting-file.validator', () => {
     expect(long.endsWith('.mp4')).toBe(true);
     expect(getExtension('Запись.MP4')).toBe('mp4');
   });
+
+  it('принимает mp3 с большим ID3-тегом (начало файла не определяется)', async () => {
+    const tag = Buffer.alloc(10 + 8000);
+    tag.write('ID3', 0, 'latin1');
+    tag[3] = 3;
+    // размер тега synchsafe: 8000 = 62 * 128 + 64
+    tag[8] = 62;
+    tag[9] = 64;
+    const mp3 = Buffer.concat([tag, samples.mp3()]);
+    await expect(check('mp3', mp3)).resolves.toBeUndefined();
+  });
+
+  it('принимает текст в UTF-16 с BOM', async () => {
+    const text = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from('Привет', 'utf16le'),
+    ]);
+    await expect(check('txt', text)).resolves.toBeUndefined();
+  });
 });
