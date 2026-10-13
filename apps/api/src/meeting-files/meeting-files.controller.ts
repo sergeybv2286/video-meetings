@@ -5,6 +5,7 @@ import {
   Param,
   Post,
   UploadedFile,
+  UseFilters,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -14,6 +15,9 @@ import {
   MeetingFileStorage,
   type StoredFileInfo,
 } from './meeting-file.storage.js';
+import { DEFAULT_MAX_FILE_SIZE } from './meeting-file.types.js';
+import { MeetingFileSizeGuard } from './meeting-file-size.guard.js';
+import { MeetingFileUploadFilter } from './meeting-file-upload.filter.js';
 import { MeetingFileAbsentGuard } from './meeting-file-absent.guard.js';
 import { MeetingFilesService } from './meeting-files.service.js';
 import { MeetingOwnerGuard } from './meeting-owner.guard.js';
@@ -24,11 +28,12 @@ export class MeetingFilesController {
   constructor(private readonly files: MeetingFilesService) {}
 
   @Post()
-  @UseGuards(MeetingFileAbsentGuard)
+  @UseGuards(MeetingFileAbsentGuard, MeetingFileSizeGuard)
+  @UseFilters(MeetingFileUploadFilter)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: new MeetingFileStorage(),
-      limits: { files: 1, fields: 0 },
+      limits: { files: 1, fields: 0, fileSize: DEFAULT_MAX_FILE_SIZE },
       // Исходные имена приходят в UTF-8 (кириллица и т. п.).
       defParamCharset: 'utf8',
     }),
