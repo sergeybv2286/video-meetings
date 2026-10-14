@@ -28,6 +28,11 @@ export class MeetingsService {
     );
   }
 
+  /** Есть ли встреча (у любого владельца). */
+  exists(id: string): boolean {
+    return this.meetings.some((meeting) => meeting.id === id);
+  }
+
   create(
     ownerId: string,
     input: { title: string; date?: string; participants?: string[] },
