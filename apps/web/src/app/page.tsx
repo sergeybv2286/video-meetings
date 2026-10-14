@@ -7,6 +7,7 @@ import {
   Alert,
   Button,
   Card,
+  Chip,
   FieldError,
   Form,
   Input,
@@ -31,8 +32,20 @@ function MeetingItem({ meeting }: { meeting: Meeting }) {
         className="block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       >
         <Card className="min-h-11 flex-row items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-surface-secondary">
-          <span className="min-w-0 break-words font-medium">
-            {meeting.title}
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="min-w-0 break-words font-medium">
+              {meeting.title}
+            </span>
+            {meeting.hasFile && (
+              <Chip
+                size="sm"
+                color="success"
+                variant="soft"
+                data-testid="has-file"
+              >
+                Есть файл
+              </Chip>
+            )}
           </span>
           <time
             className="shrink-0 text-sm text-muted"
