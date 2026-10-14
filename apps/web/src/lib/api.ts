@@ -31,10 +31,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     // An expired/invalid token on a protected call means the user is logged out.
     if (response.status === 401 && token) clearSession();
     const body = await response.json().catch(() => null);
-    const message = Array.isArray(body?.message)
-      ? body.message.join(', ')
-      : (body?.message ?? 'Что-то пошло не так');
-    throw new ApiError(message, response.status);
+    throw new ApiError(errorMessage(body), response.status);
   }
   return response.json() as Promise<T>;
 }
@@ -50,6 +47,68 @@ export interface Meeting {
   date: string;
   participants: string[];
   createdAt: string;
+  hasFile: boolean;
+}
+
+export interface MeetingFile {
+  id: string;
+  meetingId: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  status: 'UPLOADED';
+  uploadedAt: string;
+}
+
+function errorMessage(body: unknown): string {
+  const message = (body as { message?: unknown } | null)?.message;
+  if (Array.isArray(message)) return message.join(', ');
+  return typeof message === 'string' ? message : 'Что-то пошло не так';
+}
+
+/**
+ * Загрузка файла напрямую в API (другой origin, CORS настроен на сервере). Через XHR, а не
+ * fetch: только он отдаёт прогресс отправки. Отмена — через `signal`.
+ */
+export function uploadMeetingFile(
+  meetingId: string,
+  file: File,
+  onProgress: (percent: number) => void,
+  signal?: AbortSignal,
+): Promise<MeetingFile> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_URL}/meetings/${meetingId}/file`);
+    const token = getToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      let body: unknown = null;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        // Ответ не JSON — покажем общее сообщение.
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(body as MeetingFile);
+        return;
+      }
+      if (xhr.status === 401 && token) clearSession();
+      reject(new ApiError(errorMessage(body), xhr.status));
+    };
+    xhr.onerror = () =>
+      reject(new ApiError('Не удалось связаться с сервером', 0));
+    xhr.onabort = () =>
+      reject(new DOMException('Загрузка отменена', 'AbortError'));
+    signal?.addEventListener('abort', () => xhr.abort(), { once: true });
+    const form = new FormData();
+    form.append('file', file);
+    xhr.send(form);
+  });
 }
 
 export const api = {
@@ -64,6 +123,19 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   listMeetings: () => request<Meeting[]>('/meetings'),
+  getMeeting: (id: string) => request<Meeting>(`/meetings/${id}`),
+  /** Метаданные файла встречи; `null`, если файла нет. */
+  getMeetingFile: async (id: string): Promise<MeetingFile | null> => {
+    try {
+      return await request<MeetingFile>(`/meetings/${id}/file`);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        // 404 и для «нет файла», и для «нет встречи» — встречу проверяет getMeeting.
+        return null;
+      }
+      throw e;
+    }
+  },
   createMeeting: (title: string) =>
     request<Meeting>('/meetings', {
       method: 'POST',
