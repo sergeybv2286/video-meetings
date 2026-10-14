@@ -122,6 +122,26 @@ export class MeetingFilesService {
     };
   }
 
+  /** Удаляет запись и файл с диска; 404, если файла нет. Сбой удаления с диска не ломает запрос. */
+  async remove(meetingId: string): Promise<void> {
+    const file = await this.prisma.meetingFile.findUnique({
+      where: { meetingId },
+    });
+    if (!file) throw new NotFoundException('Файл не найден');
+    try {
+      await this.prisma.meetingFile.delete({ where: { id: file.id } });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException('Файл не найден');
+      }
+      throw error;
+    }
+    await this.removeFromDisk(file.storageKey);
+  }
+
   async exists(meetingId: string): Promise<boolean> {
     const count = await this.prisma.meetingFile.count({ where: { meetingId } });
     return count > 0;

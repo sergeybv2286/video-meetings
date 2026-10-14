@@ -1,7 +1,9 @@
 import {
   BadRequestException,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   StreamableFile,
   Post,
@@ -84,5 +86,11 @@ export class MeetingFilesController {
       disposition: attachmentDisposition(fileName),
       length: size,
     });
+  }
+
+  @Delete()
+  @HttpCode(204)
+  async remove(@Param('id') id: string): Promise<void> {
+    await this.files.remove(id);
   }
 }
