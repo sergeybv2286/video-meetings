@@ -202,6 +202,12 @@ importers:
       class-validator:
         specifier: ^0.15.1
         version: 0.15.1
+      file-type:
+        specifier: ^22.1.1
+        version: 22.1.1(supports-color@7.2.0)
+      multer:
+        specifier: ^2.4.0
+        version: 2.4.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2

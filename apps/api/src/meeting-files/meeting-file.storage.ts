@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import { once } from 'node:events';
 import { createWriteStream } from 'node:fs';
-import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { pipeline } from 'node:stream/promises';
+import { finished } from 'node:stream/promises';
+import type { Readable } from 'node:stream';
+import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import type { Request } from 'express';
 import type { StorageEngine } from 'multer';
 import {
@@ -11,11 +14,26 @@ import {
   resolveStoragePath,
   TMP_SUBDIR,
 } from './meeting-file.config.js';
+import {
+  getMaxFileSize,
+  sanitizeFileName,
+  type AllowedType,
+} from './meeting-file.types.js';
+import {
+  PREFIX_BYTES,
+  resolveAllowedType,
+  validateFile,
+  validatePrefix,
+} from './meeting-file.validator.js';
 
 /** Что multer кладёт в `file` после сохранения. */
 export interface StoredFileInfo {
   storageKey: string;
   size: number;
+  /** MIME, определённый сервером. */
+  mimetype: string;
+  /** Очищенное исходное имя. */
+  originalname: string;
 }
 
 /**
@@ -45,23 +63,74 @@ export class MeetingFileStorage implements StorageEngine {
   }
 
   private async save(file: Express.Multer.File): Promise<StoredFileInfo> {
+    const originalname = sanitizeFileName(file.originalname);
+    // Неподдерживаемое расширение отклоняется до записи на диск.
+    const type = resolveAllowedType(originalname);
     const root = getStorageDir();
     const id = randomUUID();
     const tmpPath = path.join(root, TMP_SUBDIR, id);
     const storageKey = `${FILES_SUBDIR}/${id}`;
     await mkdir(path.join(root, TMP_SUBDIR), { recursive: true });
     await mkdir(path.join(root, FILES_SUBDIR), { recursive: true });
+    // Вручную, а не через pipeline: pipeline уничтожает исходный поток с ошибкой, а multer
+    // принимает эту ошибку (AbortError) вместо нашей причины (413/415).
+    const out = createWriteStream(tmpPath, { flags: 'wx', mode: 0o600 });
+    let writeError: unknown;
+    out.on('error', (error) => {
+      writeError = error;
+    });
+    let size = 0;
     try {
-      await pipeline(
-        file.stream,
-        createWriteStream(tmpPath, { flags: 'wx', mode: 0o600 }),
-      );
+      for await (const chunk of guardStream(file.stream, type)) {
+        size += chunk.length;
+        if (writeError) throw writeError;
+        if (!out.write(chunk)) await once(out, 'drain');
+      }
+      if (writeError) throw writeError;
+      out.end();
+      await finished(out);
+      await validateFile(tmpPath, type);
       await rename(tmpPath, resolveStoragePath(storageKey));
     } catch (error) {
+      out.destroy();
+      file.stream.resume();
       await rm(tmpPath, { force: true });
       throw error;
     }
-    const { size } = await stat(resolveStoragePath(storageKey));
-    return { storageKey, size };
+    return { storageKey, size, mimetype: type.mime, originalname };
   }
+}
+
+/** Считает размер (лимит → 413) и проверяет сигнатуру по первому чанку, пока файл ещё пишется. */
+async function* guardStream(
+  source: Readable,
+  type: AllowedType,
+): AsyncGenerator<Buffer> {
+  const max = getMaxFileSize();
+  let total = 0;
+  let prefix = Buffer.alloc(0);
+  let prefixChecked = false;
+  // Без destroyOnReturn: иначе поток уничтожается с AbortError, и multer примет его вместо нашей ошибки.
+  const chunks = source.iterator({
+    destroyOnReturn: false,
+  }) as AsyncIterable<Buffer>;
+  for await (const chunk of chunks) {
+    total += chunk.length;
+    if (total > max) {
+      throw new PayloadTooLargeException(
+        `Файл слишком большой. Максимальный размер — ${Math.round(max / 1024 / 1024)} МБ`,
+      );
+    }
+    if (!prefixChecked) {
+      prefix = Buffer.concat([prefix, chunk]);
+      if (prefix.length >= PREFIX_BYTES) {
+        await validatePrefix(prefix, type);
+        prefixChecked = true;
+        prefix = Buffer.alloc(0);
+      }
+    }
+    yield chunk;
+  }
+  if (total === 0) throw new BadRequestException('Файл пустой');
+  if (!prefixChecked) await validatePrefix(prefix, type);
 }
