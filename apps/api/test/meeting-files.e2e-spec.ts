@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import net from 'node:net';
 import path from 'node:path';
 import request from 'supertest';
@@ -8,7 +9,7 @@ import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
 import { setupApp } from './../src/setup-app.js';
-import { samples } from './sample-files.js';
+import { mp4M4vBrand, samples } from './sample-files.js';
 import { TEST_STORAGE_DIR } from './test-storage.js';
 
 describe('Meeting files (e2e)', () => {
@@ -99,6 +100,14 @@ describe('Meeting files (e2e)', () => {
         await readFile(path.join(TEST_STORAGE_DIR, record.storageKey)),
       ).toEqual(content);
       expect(await readdir(path.join(TEST_STORAGE_DIR, 'tmp'))).toEqual([]);
+    });
+
+    it('принимает .mp4 с брендом M4V', async () => {
+      await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/file`)
+        .set(auth)
+        .attach('file', mp4M4vBrand(), 'экспорт.mp4')
+        .expect(201);
     });
 
     it('400, если файл не передан', async () => {
@@ -348,6 +357,242 @@ describe('Meeting files (e2e)', () => {
       await request(app.getHttpServer())
         .get(`/meetings/${meetingId}/file`)
         .expect(401);
+    });
+  });
+
+  const sha256 = (data: Buffer) =>
+    createHash('sha256').update(data).digest('hex');
+
+  const filesOnDisk = () => readdir(path.join(TEST_STORAGE_DIR, 'files'));
+
+  describe('GET /meetings/:id/file/download', () => {
+    const download = (id: string, headers: { Authorization?: string } = auth) =>
+      request(app.getHttpServer())
+        .get(`/meetings/${id}/file/download`)
+        .set(headers)
+        .buffer(true)
+        .parse((res, cb) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (c: Buffer) => chunks.push(c));
+          res.on('end', () => cb(null, Buffer.concat(chunks)));
+        });
+
+    it('отдаёт тот же файл (контрольная сумма совпадает) с исходным именем и заголовками', async () => {
+      await upload(meetingId).expect(201);
+
+      const res = await download(meetingId).expect(200);
+
+      expect(sha256(res.body as Buffer)).toBe(sha256(content));
+      expect(res.headers['content-type']).toContain('video/mp4');
+      expect(res.headers['content-length']).toBe(String(content.length));
+      expect(res.headers['content-disposition']).toContain('attachment');
+      expect(res.headers['content-disposition']).toContain(
+        `filename*=UTF-8''${encodeURIComponent('Запись встречи.mp4')}`,
+      );
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('404, если файла нет', async () => {
+      await download(meetingId).expect(404);
+    });
+
+    it('404, если файл пропал с диска', async () => {
+      await upload(meetingId).expect(201);
+      for (const name of await filesOnDisk()) {
+        await rm(path.join(TEST_STORAGE_DIR, 'files', name));
+      }
+
+      await download(meetingId).expect(404);
+    });
+
+    it('404 для чужой встречи', async () => {
+      await upload(meetingId).expect(201);
+      await download(meetingId, otherAuth).expect(404);
+    });
+
+    it('404 для несуществующей встречи', async () => {
+      await download(missingId).expect(404);
+    });
+
+    it('401 без токена', async () => {
+      await download(meetingId, {}).expect(401);
+    });
+  });
+
+  describe('PUT /meetings/:id/file', () => {
+    const newContent = samples.pdf();
+    const replace = (
+      id: string,
+      headers: { Authorization?: string } = auth,
+      data: Buffer = newContent,
+      name = 'Итоги.pdf',
+    ) =>
+      request(app.getHttpServer())
+        .put(`/meetings/${id}/file`)
+        .set(headers)
+        .attach('file', data, name);
+
+    it('заменяет файл: новые метаданные, на диске только новый файл', async () => {
+      const first = await upload(meetingId).expect(201);
+
+      const { body } = await replace(meetingId).expect(200);
+
+      expect(body).toMatchObject({
+        id: first.body.id,
+        meetingId,
+        originalName: 'Итоги.pdf',
+        mimeType: 'application/pdf',
+        size: newContent.length,
+        status: 'UPLOADED',
+      });
+      expect(await prisma.meetingFile.count()).toBe(1);
+      const record = await prisma.meetingFile.findUniqueOrThrow({
+        where: { meetingId },
+      });
+      expect(await filesOnDisk()).toEqual([record.storageKey.split('/')[1]]);
+      expect(
+        await readFile(path.join(TEST_STORAGE_DIR, record.storageKey)),
+      ).toEqual(newContent);
+      const info = await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/file`)
+        .set(auth)
+        .expect(200);
+      expect(info.body.originalName).toBe('Итоги.pdf');
+    });
+
+    it('параллельные замены: в конце на диске ровно один файл, совпадающий с записью', async () => {
+      await upload(meetingId).expect(201);
+
+      const results = await Promise.all(
+        [1, 2, 3, 4].map((n) =>
+          replace(meetingId, auth, samples.pdf(), `Версия ${n}.pdf`),
+        ),
+      );
+
+      expect(results.every((r) => [200, 409].includes(r.status))).toBe(true);
+      expect(results.some((r) => r.status === 200)).toBe(true);
+      const record = await prisma.meetingFile.findUniqueOrThrow({
+        where: { meetingId },
+      });
+      expect(await filesOnDisk()).toEqual([record.storageKey.split('/')[1]]);
+    });
+
+    it('если файла ещё нет, загружает его', async () => {
+      await replace(meetingId).expect(200);
+
+      expect(await prisma.meetingFile.count()).toBe(1);
+      expect(await filesOnDisk()).toHaveLength(1);
+    });
+
+    it('невалидный новый файл: 415, старый файл и метаданные не тронуты', async () => {
+      await upload(meetingId).expect(201);
+      const before = await prisma.meetingFile.findUniqueOrThrow({
+        where: { meetingId },
+      });
+
+      await replace(meetingId, auth, samples.exe(), 'Итоги.pdf').expect(415);
+
+      const after = await prisma.meetingFile.findUniqueOrThrow({
+        where: { meetingId },
+      });
+      expect(after).toEqual(before);
+      expect(await filesOnDisk()).toEqual([before.storageKey.split('/')[1]]);
+      expect(await readdir(path.join(TEST_STORAGE_DIR, 'tmp'))).toEqual([]);
+    });
+
+    it('слишком большой новый файл: 413, старый файл не тронут', async () => {
+      await upload(meetingId).expect(201);
+      process.env.MEETING_FILE_MAX_SIZE = '100';
+
+      await replace(
+        meetingId,
+        auth,
+        Buffer.concat([newContent, Buffer.alloc(500)]),
+      ).expect(413);
+
+      const record = await prisma.meetingFile.findUniqueOrThrow({
+        where: { meetingId },
+      });
+      expect(record.originalName).toBe('Запись встречи.mp4');
+      expect(await filesOnDisk()).toEqual([record.storageKey.split('/')[1]]);
+    });
+
+    it('400, если файл не передан', async () => {
+      await upload(meetingId).expect(201);
+      await request(app.getHttpServer())
+        .put(`/meetings/${meetingId}/file`)
+        .set(auth)
+        .expect(400);
+    });
+
+    it('404 для чужой встречи, файл не меняется', async () => {
+      await upload(meetingId).expect(201);
+
+      await replace(meetingId, otherAuth).expect(404);
+
+      const record = await prisma.meetingFile.findUniqueOrThrow({
+        where: { meetingId },
+      });
+      expect(record.originalName).toBe('Запись встречи.mp4');
+      expect(await filesOnDisk()).toHaveLength(1);
+    });
+
+    it('404 для несуществующей встречи', async () => {
+      await replace(missingId).expect(404);
+    });
+
+    it('401 без токена', async () => {
+      await replace(meetingId, {}).expect(401);
+    });
+  });
+
+  describe('DELETE /meetings/:id/file', () => {
+    const remove = (id: string, headers: { Authorization?: string } = auth) =>
+      request(app.getHttpServer()).delete(`/meetings/${id}/file`).set(headers);
+
+    it('удаляет файл с диска и из метаданных', async () => {
+      await upload(meetingId).expect(201);
+
+      await remove(meetingId).expect(204);
+
+      await expectNoLeftovers();
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/file`)
+        .set(auth)
+        .expect(404);
+    });
+
+    it('после удаления можно загрузить файл заново', async () => {
+      await upload(meetingId).expect(201);
+      await remove(meetingId).expect(204);
+
+      await upload(meetingId).expect(201);
+    });
+
+    it('404, если файла нет (в том числе при повторном удалении)', async () => {
+      await remove(meetingId).expect(404);
+      await upload(meetingId).expect(201);
+      await remove(meetingId).expect(204);
+      await remove(meetingId).expect(404);
+    });
+
+    it('404 для чужой встречи, файл остаётся', async () => {
+      await upload(meetingId).expect(201);
+
+      await remove(meetingId, otherAuth).expect(404);
+
+      expect(await prisma.meetingFile.count()).toBe(1);
+      expect(await filesOnDisk()).toHaveLength(1);
+    });
+
+    it('404 для несуществующей встречи', async () => {
+      await remove(missingId).expect(404);
+    });
+
+    it('401 без токена', async () => {
+      await upload(meetingId).expect(201);
+      await remove(meetingId, {}).expect(401);
+      expect(await prisma.meetingFile.count()).toBe(1);
     });
   });
 });

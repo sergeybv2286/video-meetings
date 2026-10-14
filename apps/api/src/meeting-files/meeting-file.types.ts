@@ -32,7 +32,12 @@ export interface AllowedType {
 
 /** Расширение → допустимое содержимое. Строгая таблица: `.mp4` с содержимым m4a отклоняется. */
 export const ALLOWED_TYPES: Record<string, AllowedType> = {
-  mp4: { kind: 'binary', mime: 'video/mp4', detected: ['video/mp4'] },
+  mp4: {
+    kind: 'binary',
+    mime: 'video/mp4',
+    // x-m4v — бренды `M4V `/`M4VH` (экспорт из iTunes/Apple), это тот же контейнер.
+    detected: ['video/mp4', 'video/x-m4v'],
+  },
   mov: {
     kind: 'binary',
     mime: 'video/quicktime',

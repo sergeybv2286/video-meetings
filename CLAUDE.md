@@ -53,5 +53,5 @@
 - Реализованы регистрация, вход (JWT) и встречи (`POST /meetings` — title, date, participants[]; `GET /meetings`; `GET /meetings/:id` — 404, если нет или чужая).
 - Профиль пользователя: `/users/*` (просмотр, редактирование имени/email, смена пароля, удаление аккаунта, поиск).
 - Пользователи хранятся в Postgres через Prisma (`apps/api/prisma`), миграции в `apps/api/prisma/migrations`. Для работы API и e2e-тестов Postgres должен быть запущен (`docker compose up -d`).
-- Файл встречи: `POST`/`GET /meetings/:id/file` (загрузка на диск в `FILES_STORAGE_DIR`, метаданные в Postgres, таблица `meeting_files`); есть валидация типа (по содержимому) и лимит 500 МБ; замены, удаления и скачивания пока нет.
+- Файл встречи: `POST`/`PUT`/`GET`/`DELETE /meetings/:id/file` и `GET /meetings/:id/file/download` (загрузка, замена, метаданные, удаление, скачивание; файл на диске в `FILES_STORAGE_DIR`, метаданные в Postgres, таблица `meeting_files`); есть валидация типа (по содержимому) и лимит 500 МБ; признака «есть файл» в списке встреч пока нет.
 - Встречи хранятся в памяти API, данные теряются при перезапуске.
