@@ -42,9 +42,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     headers: { 'Content-Type': 'application/json', ...init.headers },
   });
-  // 204 No Content (например, удаление файла) — тела нет.
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  // 204 No Content (например, удаление файла) и любой успешный ответ без тела.
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export interface AuthResult {
@@ -149,7 +149,14 @@ export async function downloadMeetingFile(
   fileName: string,
 ): Promise<void> {
   const response = await send(`/meetings/${meetingId}/file/download`, {});
-  const url = URL.createObjectURL(await response.blob());
+  let blob: Blob;
+  try {
+    blob = await response.blob();
+  } catch {
+    // Соединение оборвалось, пока читалось тело.
+    throw new ApiError('Не удалось скачать файл: соединение прервано', 0);
+  }
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;

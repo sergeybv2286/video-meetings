@@ -48,6 +48,15 @@ describe('api: удаление и 204', () => {
     expect(error).toMatchObject({ status: 404, message: 'Файл не найден' });
   });
 
+  it('успешный ответ 200 без тела не ломает запрос', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response('', { status: 200 })),
+    );
+
+    await expect(api.deleteMeetingFile('m1')).resolves.toBeUndefined();
+  });
+
   it('getMeetingFile: 404 → null, другие ошибки пробрасываются', async () => {
     const fetchMock = vi
       .fn()
@@ -124,6 +133,18 @@ describe('downloadMeetingFile', () => {
     expect(anchors[0].href).toBe('blob:test');
     // ссылка не остаётся в документе
     expect(document.querySelector('a[download]')).toBeNull();
+  });
+
+  it('обрыв при чтении тела → ApiError, файл не сохраняется', async () => {
+    const response = new Response('x', { status: 200 });
+    vi.spyOn(response, 'blob').mockRejectedValue(new TypeError('network'));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+
+    await expect(downloadMeetingFile('m1', 'a.txt')).rejects.toMatchObject({
+      status: 0,
+      message: expect.stringContaining('соединение прервано'),
+    });
+    expect(click).not.toHaveBeenCalled();
   });
 
   it('при ошибке сервера бросает ApiError и ничего не сохраняет', async () => {

@@ -184,6 +184,22 @@ describe('FileUpload: загрузка', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('замена (PUT), обрыв сети: НЕ подставляет старый файл с сервера, показывает ошибку', async () => {
+    vi.mocked(uploadMeetingFile).mockRejectedValue(
+      new ApiError('Не удалось связаться с сервером', 0),
+    );
+    vi.mocked(api.getMeetingFile).mockResolvedValue(uploaded);
+    const { choose, onUploaded } = setup({ method: 'PUT' });
+
+    await choose(vtt());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось связаться с сервером',
+    );
+    expect(api.getMeetingFile).not.toHaveBeenCalled();
+    expect(onUploaded).not.toHaveBeenCalled();
+  });
+
   it('обрыв сети и файла на сервере нет: обычная ошибка с повтором', async () => {
     vi.mocked(uploadMeetingFile).mockRejectedValue(
       new ApiError('Не удалось связаться с сервером', 0),

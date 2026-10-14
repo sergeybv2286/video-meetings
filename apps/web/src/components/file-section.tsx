@@ -99,14 +99,22 @@ export function FileSection({ file, onReplaced, onDeleted }: Props) {
               variant="secondary"
               className="min-h-11"
               isDisabled={replacing}
-              onPress={() => setReplacing(true)}
+              onPress={() => {
+                setError(null);
+                setReplacing(true);
+              }}
             >
               Заменить файл
             </Button>
             <Button
               variant="danger-soft"
               className="min-h-11"
-              onPress={() => setConfirmOpen(true)}
+              // Пока открыта замена, удаление недоступно: оно оборвало бы идущую загрузку.
+              isDisabled={replacing}
+              onPress={() => {
+                setError(null);
+                setConfirmOpen(true);
+              }}
             >
               Удалить
             </Button>

@@ -66,10 +66,13 @@ export function FileUpload({
       if (e instanceof DOMException && e.name === 'AbortError') {
         setFile(null);
       } else {
-        // Сеть оборвалась (0) или файл уже есть (409): возможно, сервер всё же сохранил файл —
-        // тогда показываем его карточку вместо бессмысленного «повторить».
+        // Первая загрузка: сеть оборвалась (0) или файл уже есть (409) — возможно, сервер всё же
+        // сохранил файл, тогда показываем его карточку вместо бессмысленного «повторить».
+        // При замене (PUT) так нельзя: сервер вернёт СТАРЫЙ файл, и это выглядело бы как успех.
         const existing =
-          e instanceof ApiError && (e.status === 0 || e.status === 409)
+          method === 'POST' &&
+          e instanceof ApiError &&
+          (e.status === 0 || e.status === 409)
             ? await api.getMeetingFile(meetingId).catch(() => null)
             : null;
         if (existing) {

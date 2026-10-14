@@ -112,6 +112,31 @@ describe('FileSection: замена', () => {
   });
 });
 
+describe('FileSection: взаимодействие действий', () => {
+  it('пока открыта замена, «Удалить» недоступно (не оборвать идущую загрузку)', async () => {
+    const { user } = setup();
+
+    await user.click(screen.getByRole('button', { name: 'Заменить файл' }));
+
+    expect(
+      within(screen.getByTestId('file-card')).getByRole('button', {
+        name: 'Удалить',
+      }),
+    ).toBeDisabled();
+  });
+
+  it('новая попытка действия убирает старую ошибку скачивания', async () => {
+    vi.mocked(downloadMeetingFile).mockRejectedValue(new ApiError('Сбой', 500));
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Скачать' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Сбой');
+
+    await user.click(screen.getByRole('button', { name: 'Заменить файл' }));
+
+    expect(screen.queryByText('Сбой')).toBeNull();
+  });
+});
+
 describe('FileSection: удаление', () => {
   const openDialog = async (user: ReturnType<typeof userEvent.setup>) => {
     await user.click(
