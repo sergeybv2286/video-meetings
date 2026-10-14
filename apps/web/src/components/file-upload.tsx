@@ -14,10 +14,21 @@ import {
 interface Props {
   meetingId: string;
   onUploaded: (file: MeetingFile) => void;
+  /** `PUT` — замена существующего файла; при ошибке старый файл остаётся на сервере. */
+  method?: 'POST' | 'PUT';
+  heading?: string;
+  /** Если задан, рядом с выбором файла показывается «Отмена» (например, чтобы закрыть замену). */
+  onCancel?: () => void;
 }
 
 /** Зона загрузки файла встречи: выбор через диалог и drag-and-drop, прогресс, ошибка и повтор. */
-export function FileUpload({ meetingId, onUploaded }: Props) {
+export function FileUpload({
+  meetingId,
+  onUploaded,
+  method = 'POST',
+  heading = 'Файл встречи',
+  onCancel,
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -48,6 +59,7 @@ export function FileUpload({ meetingId, onUploaded }: Props) {
         selected,
         setProgress,
         controller.signal,
+        method,
       );
       onUploaded(uploaded);
     } catch (e) {
@@ -93,7 +105,7 @@ export function FileUpload({ meetingId, onUploaded }: Props) {
   return (
     <section aria-labelledby="file-upload-title" className="space-y-3">
       <h2 id="file-upload-title" className="text-lg font-semibold">
-        Файл встречи
+        {heading}
       </h2>
 
       {error && (
@@ -167,6 +179,15 @@ export function FileUpload({ meetingId, onUploaded }: Props) {
               >
                 Выбрать файл
               </Button>
+              {onCancel && (
+                <Button
+                  variant="tertiary"
+                  className="min-h-11"
+                  onPress={onCancel}
+                >
+                  Отмена
+                </Button>
+              )}
               {error && file && validateFile(file) === null && (
                 <Button
                   variant="secondary"

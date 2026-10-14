@@ -4,14 +4,18 @@ import { useState } from 'react';
 import { Alert, Button } from '@heroui/react';
 import { ApiError, downloadMeetingFile, type MeetingFile } from '@/lib/api';
 import { FileCard } from './file-card';
+import { FileUpload } from './file-upload';
 
 interface Props {
   file: MeetingFile;
+  /** Файл заменён: приходят новые метаданные. */
+  onReplaced: (file: MeetingFile) => void;
 }
 
-/** Файл встречи: карточка и действия над ним (скачать). */
-export function FileSection({ file }: Props) {
+/** Файл встречи: карточка и действия над ним (скачать, заменить). */
+export function FileSection({ file, onReplaced }: Props) {
   const [downloading, setDownloading] = useState(false);
+  const [replacing, setReplacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function download() {
@@ -42,16 +46,38 @@ export function FileSection({ file }: Props) {
       <FileCard
         file={file}
         actions={
-          <Button
-            variant="secondary"
-            className="min-h-11"
-            isPending={downloading}
-            onPress={() => void download()}
-          >
-            {downloading ? 'Скачиваем…' : 'Скачать'}
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              className="min-h-11"
+              isPending={downloading}
+              onPress={() => void download()}
+            >
+              {downloading ? 'Скачиваем…' : 'Скачать'}
+            </Button>
+            <Button
+              variant="secondary"
+              className="min-h-11"
+              isDisabled={replacing}
+              onPress={() => setReplacing(true)}
+            >
+              Заменить файл
+            </Button>
+          </>
         }
       />
+      {replacing && (
+        <FileUpload
+          meetingId={file.meetingId}
+          method="PUT"
+          heading="Заменить файл"
+          onCancel={() => setReplacing(false)}
+          onUploaded={(next) => {
+            setReplacing(false);
+            onReplaced(next);
+          }}
+        />
+      )}
     </section>
   );
 }

@@ -117,7 +117,12 @@ function MeetingView({ id }: { id: string }) {
             </time>
           </header>
           {state.file ? (
-            <FileSection file={state.file} />
+            <FileSection
+              file={state.file}
+              onReplaced={(file) =>
+                setState({ kind: 'ready', meeting: state.meeting, file })
+              }
+            />
           ) : (
             <FileUpload
               meetingId={state.meeting.id}
