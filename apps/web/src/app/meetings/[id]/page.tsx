@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Alert, Skeleton } from '@heroui/react';
 import { AppTitle } from '@/components/app-title';
-import { FileCard } from '@/components/file-card';
+import { FileSection } from '@/components/file-section';
 import { FileUpload } from '@/components/file-upload';
 import { api, ApiError, type Meeting, type MeetingFile } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -117,7 +117,7 @@ function MeetingView({ id }: { id: string }) {
             </time>
           </header>
           {state.file ? (
-            <FileCard file={state.file} />
+            <FileSection file={state.file} />
           ) : (
             <FileUpload
               meetingId={state.meeting.id}

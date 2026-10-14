@@ -11,14 +11,21 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+/** Превращает неуспешный ответ в `ApiError`; 401 при наличии токена сбрасывает сессию. */
+async function failure(response: Response, token: string | null) {
+  // An expired/invalid token on a protected call means the user is logged out.
+  if (response.status === 401 && token) clearSession();
+  const body = await response.json().catch(() => null);
+  return new ApiError(errorMessage(body), response.status);
+}
+
+async function send(path: string, init: RequestInit): Promise<Response> {
   const token = getToken();
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
       ...init,
       headers: {
-        'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init.headers,
       },
@@ -26,13 +33,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new ApiError('Не удалось связаться с сервером', 0);
   }
+  if (!response.ok) throw await failure(response, token);
+  return response;
+}
 
-  if (!response.ok) {
-    // An expired/invalid token on a protected call means the user is logged out.
-    if (response.status === 401 && token) clearSession();
-    const body = await response.json().catch(() => null);
-    throw new ApiError(errorMessage(body), response.status);
-  }
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await send(path, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...init.headers },
+  });
+  // 204 No Content (например, удаление файла) — тела нет.
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -75,6 +86,8 @@ export function uploadMeetingFile(
   file: File,
   onProgress: (percent: number) => void,
   signal?: AbortSignal,
+  /** `POST` — первая загрузка, `PUT` — замена существующего файла. */
+  method: 'POST' | 'PUT' = 'POST',
 ): Promise<MeetingFile> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -84,7 +97,7 @@ export function uploadMeetingFile(
     const xhr = new XMLHttpRequest();
     const onAbort = () => xhr.abort();
     const cleanup = () => signal?.removeEventListener('abort', onAbort);
-    xhr.open('POST', `${API_URL}/meetings/${meetingId}/file`);
+    xhr.open(method, `${API_URL}/meetings/${meetingId}/file`);
     const token = getToken();
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.upload.onprogress = (event) => {
@@ -127,6 +140,26 @@ export function uploadMeetingFile(
   });
 }
 
+/**
+ * Скачивание файла встречи. Нужен заголовок `Authorization`, поэтому обычная ссылка не подходит:
+ * файл читается через fetch и отдаётся браузеру как blob (имя берём из метаданных).
+ */
+export async function downloadMeetingFile(
+  meetingId: string,
+  fileName: string,
+): Promise<void> {
+  const response = await send(`/meetings/${meetingId}/file/download`, {});
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Браузеру нужно время, чтобы начать сохранение, прежде чем освобождать blob.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<AuthResult>('/auth/login', {
@@ -139,6 +172,8 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   listMeetings: () => request<Meeting[]>('/meetings'),
+  deleteMeetingFile: (id: string) =>
+    request<void>(`/meetings/${id}/file`, { method: 'DELETE' }),
   getMeeting: (id: string) => request<Meeting>(`/meetings/${id}`),
   /** Метаданные файла встречи; `null`, если файла нет. */
   getMeetingFile: async (id: string): Promise<MeetingFile | null> => {
