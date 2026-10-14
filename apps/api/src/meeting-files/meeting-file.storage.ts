@@ -94,6 +94,8 @@ export class MeetingFileStorage implements StorageEngine {
     } catch (error) {
       out.destroy();
       file.stream.resume();
+      // Дожидаемся закрытия: незавершённое открытие файла иначе создаст его уже после rm.
+      if (!out.closed) await once(out, 'close');
       await rm(tmpPath, { force: true });
       throw error;
     }
