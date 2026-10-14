@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
@@ -25,15 +26,22 @@ const dateFormat = new Intl.DateTimeFormat('ru-RU', {
 function MeetingItem({ meeting }: { meeting: Meeting }) {
   return (
     <li>
-      <Card className="flex-row items-center justify-between gap-4 px-4 py-3">
-        <span className="min-w-0 break-words font-medium">{meeting.title}</span>
-        <time
-          className="shrink-0 text-sm text-muted"
-          dateTime={meeting.createdAt}
-        >
-          {dateFormat.format(new Date(meeting.createdAt))}
-        </time>
-      </Card>
+      <Link
+        href={`/meetings/${meeting.id}`}
+        className="block rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+      >
+        <Card className="min-h-11 flex-row items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-surface-secondary">
+          <span className="min-w-0 break-words font-medium">
+            {meeting.title}
+          </span>
+          <time
+            className="shrink-0 text-sm text-muted"
+            dateTime={meeting.createdAt}
+          >
+            {dateFormat.format(new Date(meeting.createdAt))}
+          </time>
+        </Card>
+      </Link>
     </li>
   );
 }

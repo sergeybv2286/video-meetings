@@ -8,12 +8,14 @@
 
 - `dev` — порт 3000; `build`, `start`
 - `lint` (ESLint + `eslint-config-prettier`), `lint:fix`
+- `test` — unit-тесты (vitest, `src/**/*.test.ts`, конфиг `vitest.config.mts`); `test:watch`
 - `typecheck` — `tsc --noEmit`. Без предварительного `build`/`dev` может падать из-за отсутствия `.next/types`.
 
 ## Структура и соглашения
 
 - App Router, исходники в `src/`, алиас `@/*` -> `src/*`.
-- Страницы: `/` (защищена, создание встречи и единый список «Ваши встречи»), `/login`, `/register`.
+- Страницы: `/` (защищена, создание встречи и единый список «Ваши встречи»; встречи — ссылки на `/meetings/<id>`), `/meetings/[id]` (защищена; заголовок и дата встречи, затем либо зона загрузки `FileUpload`, либо карточка файла `FileCard`; 404 от API — «Встреча не найдена»), `/login`, `/register`.
+- Файл встречи: `src/lib/meeting-file.ts` — клиентская проверка (допустимые расширения и лимит 500 МБ должны совпадать с серверными в `apps/api/src/meeting-files/meeting-file.types.ts`; сообщения на русском; при ошибке загрузка не начинается), `formatFileSize`, `fileTypeLabel`. `src/components/file-upload.tsx` — зона загрузки: кнопка «Выбрать файл» (скрытый `<input type=file accept>`, доступна с клавиатуры) и drag-and-drop, прогресс, «Отменить», ошибка с «Повторить загрузку». `src/components/file-card.tsx` — имя, тип, размер, дата, статус «Загружен». Загрузка идёт напрямую в API через `uploadMeetingFile` (`lib/api.ts`, XMLHttpRequest — только он даёт прогресс отправки; CORS разрешает origin из `WEB_ORIGIN`). Скачивания, замены и удаления в интерфейсе пока нет — фаза 6 в `docs/plan-meeting-file-upload.md`.
 - `src/components/theme-toggle.tsx` — кнопка переключения темы (фиксирована в правом верхнем углу, подключена в `layout.tsx`).
 - `src/components/app-title.tsx` — градиентный заголовок «Video Meetings» (на главной и в форме входа/регистрации).
 - `src/lib/api.ts` — единственная точка обращения к API (`NEXT_PUBLIC_API_URL`, по умолчанию `http://localhost:3001`). Подставляет `Authorization: Bearer`, при 401 сбрасывает сессию.
