@@ -122,6 +122,9 @@ function MeetingView({ id }: { id: string }) {
               onReplaced={(file) =>
                 setState({ kind: 'ready', meeting: state.meeting, file })
               }
+              onDeleted={() =>
+                setState({ kind: 'ready', meeting: state.meeting, file: null })
+              }
             />
           ) : (
             <FileUpload
