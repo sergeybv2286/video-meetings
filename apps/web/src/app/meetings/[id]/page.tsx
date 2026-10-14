@@ -34,6 +34,11 @@ function MeetingView({ id }: { id: string }) {
 
   const token = session?.token;
 
+  // Функциональное обновление: не затираем свежее состояние устаревшим замыканием.
+  function setFile(file: MeetingFile | null) {
+    setState((prev) => (prev.kind === 'ready' ? { ...prev, file } : prev));
+  }
+
   // Protected page: no session -> login.
   useEffect(() => {
     if (!loading && !session) router.replace('/login');
@@ -119,19 +124,13 @@ function MeetingView({ id }: { id: string }) {
           {state.file ? (
             <FileSection
               file={state.file}
-              onReplaced={(file) =>
-                setState({ kind: 'ready', meeting: state.meeting, file })
-              }
-              onDeleted={() =>
-                setState({ kind: 'ready', meeting: state.meeting, file: null })
-              }
+              onReplaced={(file) => setFile(file)}
+              onDeleted={() => setFile(null)}
             />
           ) : (
             <FileUpload
               meetingId={state.meeting.id}
-              onUploaded={(file) =>
-                setState({ kind: 'ready', meeting: state.meeting, file })
-              }
+              onUploaded={(file) => setFile(file)}
             />
           )}
         </>

@@ -23,13 +23,10 @@ async function send(path: string, init: RequestInit): Promise<Response> {
   const token = getToken();
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${path}`, {
-      ...init,
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...init.headers,
-      },
-    });
+    // Headers (а не spread): принимает и объект, и экземпляр Headers; токен нельзя переопределить.
+    const headers = new Headers(init.headers);
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    response = await fetch(`${API_URL}${path}`, { ...init, headers });
   } catch {
     throw new ApiError('Не удалось связаться с сервером', 0);
   }
@@ -164,7 +161,8 @@ export async function downloadMeetingFile(
   link.click();
   link.remove();
   // Браузеру нужно время, чтобы начать сохранение, прежде чем освобождать blob.
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  // Запас с учётом диалога «Сохранить как»: до выбора места blob должен жить.
+  setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
 }
 
 export const api = {
