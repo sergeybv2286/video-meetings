@@ -3,18 +3,22 @@ import {
   Controller,
   Get,
   Param,
+  StreamableFile,
   Post,
+  Res,
   UploadedFile,
   UseFilters,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import {
   MeetingFileStorage,
   type StoredFileInfo,
 } from './meeting-file.storage.js';
+import { attachmentDisposition } from './content-disposition.js';
 import { MAX_FILE_SIZE_CAP } from './meeting-file.types.js';
 import { MeetingFileSizeGuard } from './meeting-file-size.guard.js';
 import { MeetingFileUploadFilter } from './meeting-file-upload.filter.js';
@@ -49,5 +53,21 @@ export class MeetingFilesController {
   @Get()
   info(@Param('id') id: string) {
     return this.files.findByMeeting(id);
+  }
+
+  @Get('download')
+  async download(
+    @Param('id') id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { stream, fileName, mimeType, size } =
+      await this.files.openForDownload(id);
+    // Файл отдаётся только как вложение и без угадывания типа браузером.
+    res.set('X-Content-Type-Options', 'nosniff');
+    return new StreamableFile(stream, {
+      type: mimeType,
+      disposition: attachmentDisposition(fileName),
+      length: size,
+    });
   }
 }

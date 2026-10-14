@@ -4,7 +4,9 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { rm } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { rm, stat } from 'node:fs/promises';
+import type { ReadStream } from 'node:fs';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { resolveStoragePath } from './meeting-file.config.js';
@@ -51,6 +53,35 @@ export class MeetingFilesService {
     });
     if (!file) throw new NotFoundException('Файл не найден');
     return toMeetingFileDto(file);
+  }
+
+  /** Открывает файл на чтение; 404, если записи нет или файл пропал с диска. */
+  async openForDownload(
+    meetingId: string,
+  ): Promise<{
+    stream: ReadStream;
+    fileName: string;
+    mimeType: string;
+    size: number;
+  }> {
+    const file = await this.prisma.meetingFile.findUnique({
+      where: { meetingId },
+    });
+    if (!file) throw new NotFoundException('Файл не найден');
+    const fullPath = resolveStoragePath(file.storageKey);
+    let size: number;
+    try {
+      size = (await stat(fullPath)).size;
+    } catch {
+      this.logger.error(`Файл ${file.storageKey} отсутствует на диске`);
+      throw new NotFoundException('Файл не найден');
+    }
+    return {
+      stream: createReadStream(fullPath),
+      fileName: file.originalName,
+      mimeType: file.mimeType,
+      size,
+    };
   }
 
   async exists(meetingId: string): Promise<boolean> {
