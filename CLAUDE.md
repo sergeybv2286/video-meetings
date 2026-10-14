@@ -28,6 +28,7 @@
 ## Соглашения
 
 - Единый Prettier-конфиг в корне (`singleQuote`, `trailingComma: all`). Перед завершением работы запускайте `pnpm format`, `pnpm lint` и `pnpm typecheck`.
+- Git-хук Husky (`.husky/pre-commit`) на каждый коммит запускает `pnpm lint` и `pnpm test`; хуки ставятся скриптом `prepare` при `pnpm install`.
 - Автоформатирование: хук `PostToolUse` в `.claude/settings.json` запускает `prettier --write` на каждом файле после `Write`/`Edit` (учитывает `.prettierignore`). Если файл изменился после правки, перечитайте его перед следующим `Edit`.
 - Зависимости добавляйте в конкретный пакет: `pnpm --filter <web|api> add <pkg>`. В корне только общие dev-инструменты.
 - Язык интерфейса и сообщений об ошибках — русский.
@@ -52,4 +53,5 @@
 - Реализованы регистрация, вход (JWT) и встречи (`POST /meetings` — title, date, participants[]; `GET /meetings`; `GET /meetings/:id` — 404, если нет или чужая).
 - Профиль пользователя: `/users/*` (просмотр, редактирование имени/email, смена пароля, удаление аккаунта, поиск).
 - Пользователи хранятся в Postgres через Prisma (`apps/api/prisma`), миграции в `apps/api/prisma/migrations`. Для работы API и e2e-тестов Postgres должен быть запущен (`docker compose up -d`).
+- Файл встречи: `POST`/`GET /meetings/:id/file` (загрузка на диск в `FILES_STORAGE_DIR`, метаданные в Postgres, таблица `meeting_files`); валидации типа/размера, замены, удаления и скачивания пока нет.
 - Встречи хранятся в памяти API, данные теряются при перезапуске.

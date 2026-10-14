@@ -52,3 +52,4 @@ API работает с БД через Prisma (`apps/api/prisma/schema.prisma`)
 - `pnpm test` — unit-тесты всех пакетов (e2e API запускаются отдельно, см. «Тесты»)
 - `pnpm typecheck` — проверка типов
 - `pnpm format` / `format:check` — Prettier для всего репозитория
+- Git-хук `pre-commit` (Husky, `.husky/pre-commit`) перед каждым коммитом запускает `pnpm lint` и `pnpm test`; устанавливается автоматически через `prepare` при `pnpm install`. Обойти в крайнем случае: `git commit --no-verify`
