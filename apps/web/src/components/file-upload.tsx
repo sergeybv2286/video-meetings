@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { Alert, Button, ProgressBar } from '@heroui/react';
-import { ApiError, uploadMeetingFile, type MeetingFile } from '@/lib/api';
+import { api, ApiError, uploadMeetingFile, type MeetingFile } from '@/lib/api';
 import {
   ACCEPT,
   FORMAT_GROUPS,
@@ -54,9 +54,19 @@ export function FileUpload({ meetingId, onUploaded }: Props) {
       if (e instanceof DOMException && e.name === 'AbortError') {
         setFile(null);
       } else {
-        setError(
-          e instanceof ApiError ? e.message : 'Не удалось загрузить файл',
-        );
+        // Сеть оборвалась (0) или файл уже есть (409): возможно, сервер всё же сохранил файл —
+        // тогда показываем его карточку вместо бессмысленного «повторить».
+        const existing =
+          e instanceof ApiError && (e.status === 0 || e.status === 409)
+            ? await api.getMeetingFile(meetingId).catch(() => null)
+            : null;
+        if (existing) {
+          onUploaded(existing);
+        } else {
+          setError(
+            e instanceof ApiError ? e.message : 'Не удалось загрузить файл',
+          );
+        }
       }
     } finally {
       setUploading(false);
@@ -104,7 +114,12 @@ export function FileUpload({ meetingId, onUploaded }: Props) {
           e.preventDefault();
           if (!uploading) setDragging(true);
         }}
-        onDragLeave={() => setDragging(false)}
+        onDragLeave={(e) => {
+          // Переход курсора на вложенный элемент зоны не должен гасить подсветку.
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            setDragging(false);
+          }
+        }}
         onDrop={onDrop}
         className={`flex flex-col items-center gap-4 rounded-xl border-2 border-dashed p-6 text-center transition-colors ${
           dragging

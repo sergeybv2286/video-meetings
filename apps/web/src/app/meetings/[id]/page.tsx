@@ -22,8 +22,13 @@ type State =
   | { kind: 'ready'; meeting: Meeting; file: MeetingFile | null };
 
 export default function MeetingPage() {
-  const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  // key: при смене встречи состояние (и зона загрузки) создаются заново, чужие данные не остаются.
+  return <MeetingView key={id} id={id} />;
+}
+
+function MeetingView({ id }: { id: string }) {
+  const router = useRouter();
   const { session, loading } = useSession();
   const [state, setState] = useState<State>({ kind: 'loading' });
 

@@ -77,7 +77,13 @@ export function uploadMeetingFile(
   signal?: AbortSignal,
 ): Promise<MeetingFile> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Загрузка отменена', 'AbortError'));
+      return;
+    }
     const xhr = new XMLHttpRequest();
+    const onAbort = () => xhr.abort();
+    const cleanup = () => signal?.removeEventListener('abort', onAbort);
     xhr.open('POST', `${API_URL}/meetings/${meetingId}/file`);
     const token = getToken();
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -87,6 +93,7 @@ export function uploadMeetingFile(
       }
     };
     xhr.onload = () => {
+      cleanup();
       let body: unknown = null;
       try {
         body = JSON.parse(xhr.responseText);
@@ -98,13 +105,22 @@ export function uploadMeetingFile(
         return;
       }
       if (xhr.status === 401 && token) clearSession();
-      reject(new ApiError(errorMessage(body), xhr.status));
+      // Прокси/балансировщик может ответить не JSON (например, HTML на 413).
+      const message =
+        body === null && xhr.status === 413
+          ? 'Файл слишком большой'
+          : errorMessage(body);
+      reject(new ApiError(message, xhr.status));
     };
-    xhr.onerror = () =>
+    xhr.onerror = () => {
+      cleanup();
       reject(new ApiError('Не удалось связаться с сервером', 0));
-    xhr.onabort = () =>
+    };
+    xhr.onabort = () => {
+      cleanup();
       reject(new DOMException('Загрузка отменена', 'AbortError'));
-    signal?.addEventListener('abort', () => xhr.abort(), { once: true });
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
     const form = new FormData();
     form.append('file', file);
     xhr.send(form);
