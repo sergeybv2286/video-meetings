@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
 import net from 'node:net';
 import path from 'node:path';
 import request from 'supertest';
@@ -307,30 +307,6 @@ describe('Meeting files (e2e)', () => {
       expect(body.status).toBe('UPLOADED');
     });
 
-    it('метаданные сохраняются в БД и доступны после перезапуска приложения', async () => {
-      const uploaded = await upload(meetingId).expect(201);
-      const record = await prisma.meetingFile.findUniqueOrThrow({
-        where: { meetingId },
-      });
-
-      await app.close();
-      const moduleRef = await Test.createTestingModule({
-        imports: [AppModule],
-      }).compile();
-      app = moduleRef.createNestApplication();
-      setupApp(app);
-      await app.init();
-
-      const restored = await app
-        .get(PrismaService)
-        .meetingFile.findUniqueOrThrow({ where: { meetingId } });
-      expect(restored.id).toBe(uploaded.body.id);
-      expect(
-        await readFile(path.join(TEST_STORAGE_DIR, restored.storageKey)),
-      ).toEqual(content);
-      expect(restored.storageKey).toBe(record.storageKey);
-    });
-
     it('404, если у встречи нет файла', async () => {
       await request(app.getHttpServer())
         .get(`/meetings/${meetingId}/file`)
@@ -593,6 +569,104 @@ describe('Meeting files (e2e)', () => {
       await upload(meetingId).expect(201);
       await remove(meetingId, {}).expect(401);
       expect(await prisma.meetingFile.count()).toBe(1);
+    });
+  });
+
+  describe('признак hasFile', () => {
+    const getList = () =>
+      request(app.getHttpServer()).get('/meetings').set(auth).expect(200);
+    const getOne = () =>
+      request(app.getHttpServer())
+        .get(`/meetings/${meetingId}`)
+        .set(auth)
+        .expect(200);
+
+    it('false у встречи без файла — в списке и в деталях', async () => {
+      expect((await getList()).body[0].hasFile).toBe(false);
+      expect((await getOne()).body.hasFile).toBe(false);
+    });
+
+    it('true после загрузки, и только у встречи с файлом', async () => {
+      const { body: other } = await request(app.getHttpServer())
+        .post('/meetings')
+        .set(auth)
+        .send({ title: 'Без файла' })
+        .expect(201);
+      expect(other.hasFile).toBe(false);
+      await upload(meetingId).expect(201);
+
+      const list = (await getList()).body as {
+        id: string;
+        hasFile: boolean;
+      }[];
+      expect(list.find((m) => m.id === meetingId)?.hasFile).toBe(true);
+      expect(list.find((m) => m.id === other.id)?.hasFile).toBe(false);
+      expect((await getOne()).body.hasFile).toBe(true);
+    });
+
+    it('остаётся true после замены и сбрасывается после удаления файла', async () => {
+      await upload(meetingId).expect(201);
+      await request(app.getHttpServer())
+        .put(`/meetings/${meetingId}/file`)
+        .set(auth)
+        .attach('file', samples.pdf(), 'Итоги.pdf')
+        .expect(200);
+      expect((await getOne()).body.hasFile).toBe(true);
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/file`)
+        .set(auth)
+        .expect(204);
+
+      expect((await getOne()).body.hasFile).toBe(false);
+      expect((await getList()).body[0].hasFile).toBe(false);
+    });
+
+    it('чужой файл не влияет на признак', async () => {
+      await upload(meetingId).expect(201);
+      const { body } = await request(app.getHttpServer())
+        .post('/meetings')
+        .set(otherAuth)
+        .send({ title: 'Чужая' })
+        .expect(201);
+
+      expect(body.hasFile).toBe(false);
+      const list = await request(app.getHttpServer())
+        .get('/meetings')
+        .set(otherAuth)
+        .expect(200);
+      expect(list.body.map((m: { hasFile: boolean }) => m.hasFile)).toEqual([
+        false,
+      ]);
+    });
+  });
+
+  describe('очистка сирот при старте', () => {
+    it('после «перезапуска» (встречи в памяти пропали) записи и файлы удаляются', async () => {
+      await upload(meetingId).expect(201);
+      // Хвост незавершённой загрузки и файл без записи.
+      await mkdir(path.join(TEST_STORAGE_DIR, 'tmp'), { recursive: true });
+      await writeFile(
+        path.join(TEST_STORAGE_DIR, 'tmp', randomUUID()),
+        'недогруженный',
+      );
+      await writeFile(
+        path.join(TEST_STORAGE_DIR, 'files', randomUUID()),
+        'без записи',
+      );
+      expect(await prisma.meetingFile.count()).toBe(1);
+
+      const restarted = await Test.createTestingModule({
+        imports: [AppModule],
+      }).compile();
+      const restartedApp = restarted.createNestApplication();
+      setupApp(restartedApp);
+      await restartedApp.init();
+      try {
+        await expectNoLeftovers();
+      } finally {
+        await restartedApp.close();
+      }
     });
   });
 });
