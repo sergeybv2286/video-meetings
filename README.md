@@ -33,12 +33,12 @@ API работает с БД через Prisma (`apps/api/prisma/schema.prisma`)
 
 ## Тесты
 
-| Команда                        | Что запускает                                                   | Нужен Postgres |
-| ------------------------------ | --------------------------------------------------------------- | -------------- |
-| `pnpm test`                    | unit-тесты пакетов (`apps/api/src/**/*.spec.ts`; сейчас их нет) | нет            |
-| `pnpm --filter api test:e2e`   | e2e API (`apps/api/test/*.e2e-spec.ts`: auth, users, meetings)  | да             |
-| `pnpm --filter api test:watch` | unit-тесты API в watch-режиме                                   | нет            |
-| `pnpm --filter api test:cov`   | unit-тесты API с покрытием                                      | нет            |
+| Команда                        | Что запускает                                                                 | Нужен Postgres |
+| ------------------------------ | ----------------------------------------------------------------------------- | -------------- |
+| `pnpm test`                    | unit-тесты пакетов (`apps/api/src/**/*.spec.ts`, `apps/web/src/**/*.test.ts`) | нет            |
+| `pnpm --filter api test:e2e`   | e2e API (`apps/api/test/*.e2e-spec.ts`: auth, users, meetings, файлы встреч)  | да             |
+| `pnpm --filter api test:watch` | unit-тесты API в watch-режиме                                                 | нет            |
+| `pnpm --filter api test:cov`   | unit-тесты API с покрытием                                                    | нет            |
 
 Для e2e сначала запустите Postgres: `docker compose up -d`. Тесты работают с отдельной БД `video_meetings_test` (адрес переопределяется через `TEST_DATABASE_URL`): перед прогоном `test/global-setup.ts` применяет к ней миграции, файлы идут последовательно, а таблицу `users` каждый тест очищает сам, dev-данные не затрагиваются. Один файл: `pnpm --filter api test:e2e -- test/users.e2e-spec.ts`.
 
