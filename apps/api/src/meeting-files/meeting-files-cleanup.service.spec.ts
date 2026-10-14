@@ -144,4 +144,14 @@ describe('MeetingFilesCleanupService', () => {
 
     await expect(service.onApplicationBootstrap()).resolves.toBeUndefined();
   });
+
+  it('ошибка чтения каталога (не ENOENT) не прячется', async () => {
+    // files — не каталог: readdir падает с ENOTDIR
+    await rm(path.join(dir, 'files'), { recursive: true });
+    await writeFile(path.join(dir, 'files'), 'x');
+    const { service } = makeService([], []);
+
+    await expect(service.cleanup()).rejects.toThrow();
+    await expect(service.onApplicationBootstrap()).resolves.toBeUndefined();
+  });
 });

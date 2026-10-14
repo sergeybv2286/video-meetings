@@ -104,8 +104,10 @@ export class MeetingFilesCleanupService implements OnApplicationBootstrap {
     try {
       const names = await readdir(path.join(getStorageDir(), subdir));
       return names.filter((name) => SERVER_FILE_NAME.test(name));
-    } catch {
-      return [];
+    } catch (error) {
+      // Каталога ещё нет — это нормально; остальные ошибки (права и т. п.) не прячем.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
     }
   }
 
