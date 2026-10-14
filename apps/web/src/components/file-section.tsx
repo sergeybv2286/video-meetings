@@ -46,11 +46,13 @@ export function FileSection({ file, onReplaced, onDeleted }: Props) {
     try {
       await api.deleteMeetingFile(file.meetingId);
       setConfirmOpen(false);
+      setDeleteError(null);
       onDeleted();
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) {
         // Файл уже удалён (например, в другой вкладке): цель достигнута.
         setConfirmOpen(false);
+        setDeleteError(null);
         onDeleted();
         return;
       }

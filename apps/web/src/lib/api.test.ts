@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiError, downloadMeetingFile, uploadMeetingFile } from './api';
 import { getToken } from './session';
@@ -31,7 +30,9 @@ describe('api: удаление и 204', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('http://localhost:3001/meetings/m1/file');
     expect(init.method).toBe('DELETE');
-    expect(init.headers.Authorization).toBe('Bearer token-1');
+    expect(new Headers(init.headers).get('Authorization')).toBe(
+      'Bearer token-1',
+    );
   });
 
   it('deleteMeetingFile: 404 → ApiError со статусом и русским сообщением сервера', async () => {
@@ -55,6 +56,16 @@ describe('api: удаление и 204', () => {
     );
 
     await expect(api.deleteMeetingFile('m1')).resolves.toBeUndefined();
+  });
+
+  it('заголовки: принимает Headers, Content-Type по умолчанию, токен не перебить', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({}));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api.getMeeting('m1');
+    const headers = new Headers(fetchMock.mock.calls[0][1].headers);
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('Authorization')).toBe('Bearer token-1');
   });
 
   it('getMeetingFile: 404 → null, другие ошибки пробрасываются', async () => {
@@ -125,9 +136,9 @@ describe('downloadMeetingFile', () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       'http://localhost:3001/meetings/m1/file/download',
     );
-    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe(
-      'Bearer token-1',
-    );
+    expect(
+      new Headers(fetchMock.mock.calls[0][1].headers).get('Authorization'),
+    ).toBe('Bearer token-1');
     expect(click).toHaveBeenCalledTimes(1);
     expect(anchors[0].download).toBe('Запись встречи.mp4');
     expect(anchors[0].href).toBe('blob:test');

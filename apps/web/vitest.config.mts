@@ -2,7 +2,8 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    // Файлы с компонентами/DOM помечаются `// @vitest-environment jsdom`; чистая логика идёт в node.
+    // jsdom для всех тестов: компонентный тест без отдельной пометки не должен падать на `document`.
+    environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     passWithNoTests: true,
     clearMocks: true,

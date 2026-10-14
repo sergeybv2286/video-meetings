@@ -8,7 +8,7 @@
 
 - `dev` — порт 3000; `build`, `start`
 - `lint` (ESLint + `eslint-config-prettier`), `lint:fix`
-- `test` — unit-тесты (vitest, `src/**/*.test.{ts,tsx}`, конфиг `vitest.config.mts`, `setupFiles` подключает `@testing-library/jest-dom`); `test:watch`. Тесты с DOM помечаются первой строкой `// @vitest-environment jsdom` (компоненты — `@testing-library/react` и `user-event`, `lib/api` мокается через `vi.mock('@/lib/api', …)`); чистая логика идёт в node.
+- `test` — unit-тесты (vitest, `src/**/*.test.{ts,tsx}`, конфиг `vitest.config.mts`, `setupFiles` подключает `@testing-library/jest-dom`); `test:watch`. Окружение всех тестов — jsdom (компоненты — `@testing-library/react` и `user-event`, `lib/api` мокается через `vi.mock('@/lib/api', …)`).
 - `typecheck` — `tsc --noEmit`. Без предварительного `build`/`dev` может падать из-за отсутствия `.next/types`.
 
 ## Структура и соглашения
