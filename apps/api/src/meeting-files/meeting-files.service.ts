@@ -47,6 +47,46 @@ export class MeetingFilesService {
     }
   }
 
+  /**
+   * Заменяет файл встречи уже записанным на диск новым. Сначала обновляются метаданные,
+   * и только потом удаляется старый файл: при ошибке старый остаётся нетронутым, а новый
+   * удаляется. Если файла ещё не было, ведёт себя как `create`.
+   */
+  async replace(
+    meetingId: string,
+    file: Express.Multer.File & StoredFileInfo,
+  ): Promise<MeetingFileDto> {
+    const previous = await this.prisma.meetingFile.findUnique({
+      where: { meetingId },
+    });
+    if (!previous) return this.create(meetingId, file);
+    let updated;
+    try {
+      updated = await this.prisma.meetingFile.update({
+        where: { id: previous.id },
+        data: {
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          size: file.size,
+          storageKey: file.storageKey,
+          uploadedAt: new Date(),
+        },
+      });
+    } catch (error) {
+      await this.removeFromDisk(file.storageKey);
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        // Файл удалили параллельно — записи для замены нет, создаём заново.
+        return this.create(meetingId, file);
+      }
+      throw error;
+    }
+    await this.removeFromDisk(previous.storageKey);
+    return toMeetingFileDto(updated);
+  }
+
   async findByMeeting(meetingId: string): Promise<MeetingFileDto> {
     const file = await this.prisma.meetingFile.findUnique({
       where: { meetingId },
@@ -56,9 +96,7 @@ export class MeetingFilesService {
   }
 
   /** Открывает файл на чтение; 404, если записи нет или файл пропал с диска. */
-  async openForDownload(
-    meetingId: string,
-  ): Promise<{
+  async openForDownload(meetingId: string): Promise<{
     stream: ReadStream;
     fileName: string;
     mimeType: string;

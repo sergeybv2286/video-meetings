@@ -5,6 +5,7 @@ import {
   Param,
   StreamableFile,
   Post,
+  Put,
   Res,
   UploadedFile,
   UseFilters,
@@ -26,6 +27,15 @@ import { MeetingFileAbsentGuard } from './meeting-file-absent.guard.js';
 import { MeetingFilesService } from './meeting-files.service.js';
 import { MeetingOwnerGuard } from './meeting-owner.guard.js';
 
+function fileUploadOptions() {
+  return {
+    storage: new MeetingFileStorage(),
+    limits: { files: 1, fields: 0, fileSize: MAX_FILE_SIZE_CAP },
+    // Исходные имена приходят в UTF-8 (кириллица и т. п.).
+    defParamCharset: 'utf8' as const,
+  };
+}
+
 @Controller('meetings/:id/file')
 @UseGuards(JwtAuthGuard, MeetingOwnerGuard)
 export class MeetingFilesController {
@@ -34,20 +44,25 @@ export class MeetingFilesController {
   @Post()
   @UseGuards(MeetingFileAbsentGuard, MeetingFileSizeGuard)
   @UseFilters(MeetingFileUploadFilter)
-  @UseInterceptors(
-    FileInterceptor('file', {
-      storage: new MeetingFileStorage(),
-      limits: { files: 1, fields: 0, fileSize: MAX_FILE_SIZE_CAP },
-      // Исходные имена приходят в UTF-8 (кириллица и т. п.).
-      defParamCharset: 'utf8',
-    }),
-  )
+  @UseInterceptors(FileInterceptor('file', fileUploadOptions()))
   upload(
     @Param('id') id: string,
     @UploadedFile() file?: Express.Multer.File & StoredFileInfo,
   ) {
     if (!file) throw new BadRequestException('Файл не передан');
     return this.files.create(id, file);
+  }
+
+  @Put()
+  @UseGuards(MeetingFileSizeGuard)
+  @UseFilters(MeetingFileUploadFilter)
+  @UseInterceptors(FileInterceptor('file', fileUploadOptions()))
+  replace(
+    @Param('id') id: string,
+    @UploadedFile() file?: Express.Multer.File & StoredFileInfo,
+  ) {
+    if (!file) throw new BadRequestException('Файл не передан');
+    return this.files.replace(id, file);
   }
 
   @Get()
