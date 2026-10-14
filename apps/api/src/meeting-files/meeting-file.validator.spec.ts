@@ -2,7 +2,7 @@ import { UnsupportedMediaTypeException } from '@nestjs/common';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { samples } from '../../test/sample-files.js';
+import { mp4M4vBrand, samples } from '../../test/sample-files.js';
 import { getExtension, sanitizeFileName } from './meeting-file.types.js';
 import {
   listZipEntries,
@@ -34,6 +34,10 @@ describe('meeting-file.validator', () => {
       ).resolves.toBeUndefined();
     },
   );
+
+  it('принимает .mp4 с брендом M4V (video/x-m4v)', async () => {
+    await expect(check('mp4', mp4M4vBrand())).resolves.toBeUndefined();
+  });
 
   it('отклоняет неизвестное расширение (415)', () => {
     expect(() => resolveAllowedType('virus.exe')).toThrow(

@@ -57,6 +57,9 @@ export function makeZip(entries: Record<string, string>): Buffer {
   return Buffer.concat([...locals, cdBuf, eocd]);
 }
 
+/** mp4 с брендом `M4V ` (экспорт из Apple): `file-type` определяет его как video/x-m4v. */
+export const mp4M4vBrand = () => ftyp('M4V ', ['M4V ', 'mp42', 'isom']);
+
 export const samples = {
   mp4: () => ftyp('isom', ['isom', 'mp42']),
   mov: () => ftyp('qt  ', ['qt  ']),

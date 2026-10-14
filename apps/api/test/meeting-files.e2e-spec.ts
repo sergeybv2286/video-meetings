@@ -9,7 +9,7 @@ import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
 import { setupApp } from './../src/setup-app.js';
-import { samples } from './sample-files.js';
+import { mp4M4vBrand, samples } from './sample-files.js';
 import { TEST_STORAGE_DIR } from './test-storage.js';
 
 describe('Meeting files (e2e)', () => {
@@ -100,6 +100,14 @@ describe('Meeting files (e2e)', () => {
         await readFile(path.join(TEST_STORAGE_DIR, record.storageKey)),
       ).toEqual(content);
       expect(await readdir(path.join(TEST_STORAGE_DIR, 'tmp'))).toEqual([]);
+    });
+
+    it('принимает .mp4 с брендом M4V', async () => {
+      await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/file`)
+        .set(auth)
+        .attach('file', mp4M4vBrand(), 'экспорт.mp4')
+        .expect(201);
     });
 
     it('400, если файл не передан', async () => {
@@ -450,6 +458,23 @@ describe('Meeting files (e2e)', () => {
         .set(auth)
         .expect(200);
       expect(info.body.originalName).toBe('Итоги.pdf');
+    });
+
+    it('параллельные замены: в конце на диске ровно один файл, совпадающий с записью', async () => {
+      await upload(meetingId).expect(201);
+
+      const results = await Promise.all(
+        [1, 2, 3, 4].map((n) =>
+          replace(meetingId, auth, samples.pdf(), `Версия ${n}.pdf`),
+        ),
+      );
+
+      expect(results.every((r) => [200, 409].includes(r.status))).toBe(true);
+      expect(results.some((r) => r.status === 200)).toBe(true);
+      const record = await prisma.meetingFile.findUniqueOrThrow({
+        where: { meetingId },
+      });
+      expect(await filesOnDisk()).toEqual([record.storageKey.split('/')[1]]);
     });
 
     it('если файла ещё нет, загружает его', async () => {

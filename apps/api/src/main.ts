@@ -6,7 +6,7 @@ import { setupApp } from './setup-app.js';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   setupApp(app);
-  await app.listen(process.env.PORT ?? 3001);
   configureServer(app.getHttpServer());
+  await app.listen(process.env.PORT ?? 3001);
 }
 await bootstrap();

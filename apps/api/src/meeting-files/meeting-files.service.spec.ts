@@ -137,17 +137,19 @@ describe('MeetingFilesService', () => {
       await writeFile(path.join(dir, 'files', 'new'), 'новый');
     });
 
-    it('обновляет метаданные и удаляет старый файл с диска', async () => {
+    it('обновляет метаданные условно по старому storageKey и удаляет старый файл', async () => {
       const findUnique = vi.fn().mockResolvedValue(row);
-      const update = vi.fn().mockResolvedValue(updatedRow);
+      const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+      const findUniqueOrThrow = vi.fn().mockResolvedValue(updatedRow);
 
-      const dto = await makeService({ findUnique, update }).replace(
-        meetingId,
-        newFile,
-      );
+      const dto = await makeService({
+        findUnique,
+        updateMany,
+        findUniqueOrThrow,
+      }).replace(meetingId, newFile);
 
-      expect(update).toHaveBeenCalledWith({
-        where: { id: row.id },
+      expect(updateMany).toHaveBeenCalledWith({
+        where: { id: row.id, storageKey: 'files/abc' },
         data: expect.objectContaining({
           originalName: 'новая.mp4',
           size: 5,
@@ -161,10 +163,10 @@ describe('MeetingFilesService', () => {
 
     it('при ошибке БД старый файл остаётся, новый удаляется', async () => {
       const findUnique = vi.fn().mockResolvedValue(row);
-      const update = vi.fn().mockRejectedValue(new Error('db down'));
+      const updateMany = vi.fn().mockRejectedValue(new Error('db down'));
 
       await expect(
-        makeService({ findUnique, update }).replace(meetingId, newFile),
+        makeService({ findUnique, updateMany }).replace(meetingId, newFile),
       ).rejects.toThrow('db down');
       expect(await readdir(path.join(dir, 'files'))).toEqual(['abc']);
     });
@@ -185,17 +187,15 @@ describe('MeetingFilesService', () => {
       );
     });
 
-    it('если запись пропала при обновлении (P2025), создаёт новую', async () => {
-      const findUnique = vi.fn().mockResolvedValue(row);
-      const update = vi.fn().mockRejectedValue(
-        new Prisma.PrismaClientKnownRequestError('gone', {
-          code: 'P2025',
-          clientVersion: 'test',
-        }),
-      );
+    it('если запись удалили параллельно, создаёт новую', async () => {
+      const findUnique = vi
+        .fn()
+        .mockResolvedValueOnce(row)
+        .mockResolvedValueOnce(null);
+      const updateMany = vi.fn().mockResolvedValue({ count: 0 });
       const create = vi.fn().mockResolvedValue(updatedRow);
 
-      await makeService({ findUnique, update, create }).replace(
+      await makeService({ findUnique, updateMany, create }).replace(
         meetingId,
         newFile,
       );
@@ -203,16 +203,36 @@ describe('MeetingFilesService', () => {
       expect(create).toHaveBeenCalled();
     });
 
+    it('параллельная замена: 409, свой новый файл удалён, чужой не тронут', async () => {
+      const other = { ...row, storageKey: 'files/other' };
+      await writeFile(path.join(dir, 'files', 'other'), 'чужой');
+      const findUnique = vi
+        .fn()
+        .mockResolvedValueOnce(row)
+        .mockResolvedValueOnce(other);
+      const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+
+      await expect(
+        makeService({ findUnique, updateMany }).replace(meetingId, newFile),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect((await readdir(path.join(dir, 'files'))).sort()).toEqual([
+        'abc',
+        'other',
+      ]);
+    });
+
     it('сбой удаления старого файла не ломает замену', async () => {
       const findUnique = vi
         .fn()
         .mockResolvedValue({ ...row, storageKey: '../outside' });
-      const update = vi.fn().mockResolvedValue(updatedRow);
+      const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+      const findUniqueOrThrow = vi.fn().mockResolvedValue(updatedRow);
 
-      const dto = await makeService({ findUnique, update }).replace(
-        meetingId,
-        newFile,
-      );
+      const dto = await makeService({
+        findUnique,
+        updateMany,
+        findUniqueOrThrow,
+      }).replace(meetingId, newFile);
 
       expect(dto.originalName).toBe('новая.mp4');
     });

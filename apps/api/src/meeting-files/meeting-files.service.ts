@@ -60,10 +60,11 @@ export class MeetingFilesService {
       where: { meetingId },
     });
     if (!previous) return this.create(meetingId, file);
-    let updated;
+    let count: number;
     try {
-      updated = await this.prisma.meetingFile.update({
-        where: { id: previous.id },
+      // Условие по storageKey: параллельная замена уже могла подменить файл.
+      ({ count } = await this.prisma.meetingFile.updateMany({
+        where: { id: previous.id, storageKey: previous.storageKey },
         data: {
           originalName: file.originalname,
           mimeType: file.mimetype,
@@ -71,18 +72,26 @@ export class MeetingFilesService {
           storageKey: file.storageKey,
           uploadedAt: new Date(),
         },
-      });
+      }));
     } catch (error) {
       await this.removeFromDisk(file.storageKey);
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        // Файл удалили параллельно — записи для замены нет, создаём заново.
-        return this.create(meetingId, file);
-      }
       throw error;
     }
+    if (count === 0) {
+      const current = await this.prisma.meetingFile
+        .findUnique({ where: { meetingId } })
+        .catch(() => null);
+      // Файл удалили параллельно — создаём заново.
+      if (!current) return this.create(meetingId, file);
+      // Файл заменили параллельно: свой новый файл не нужен, чужой не трогаем.
+      await this.removeFromDisk(file.storageKey);
+      throw new ConflictException(
+        'Файл одновременно изменён другим запросом. Повторите попытку',
+      );
+    }
+    const updated = await this.prisma.meetingFile.findUniqueOrThrow({
+      where: { id: previous.id },
+    });
     await this.removeFromDisk(previous.storageKey);
     return toMeetingFileDto(updated);
   }
