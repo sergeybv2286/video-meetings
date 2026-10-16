@@ -20,3 +20,17 @@ apps/api/src/generated
 
 # Хранилище файлов встреч
 apps/api/storage
+
+# Логи
+*.log
+
+# Playwright MCP и скриншоты ручной проверки
+.playwright-mcp/
+/screenshot*.png
+
+# Локальные настройки Claude Code
+.claude/settings.local.json
+
+# Ключи и сертификаты
+*.pem
+*.key
