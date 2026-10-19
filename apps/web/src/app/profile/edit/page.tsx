@@ -7,7 +7,7 @@ import { Alert, Card, Skeleton } from '@heroui/react';
 import { AppTitle } from '@/components/app-title';
 import { ProfileForm } from '@/components/profile-form';
 import { api, ApiError, type UserProfile } from '@/lib/api';
-import { useSession } from '@/lib/session';
+import { saveSession, useSession } from '@/lib/session';
 
 type State =
   | { kind: 'loading' }
@@ -81,7 +81,11 @@ export default function EditProfilePage() {
           <Card.Content>
             <ProfileForm
               profile={state.profile}
-              onSaved={(profile) => setState({ kind: 'ready', profile })}
+              onSaved={(profile) => {
+                setState({ kind: 'ready', profile });
+                // Email в сессии берётся из токена и устаревает после смены.
+                if (token) saveSession({ token, email: profile.email });
+              }}
             />
           </Card.Content>
         </Card>
