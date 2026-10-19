@@ -117,4 +117,51 @@ describe('форма имени и email', () => {
     await user.type(screen.getByLabelText('Имя'), 'а');
     expect(screen.queryByText('Изменения сохранены')).not.toBeInTheDocument();
   });
+
+  it('ошибка в onSaved не превращает успешное сохранение в ошибку', async () => {
+    const { user, onSaved } = setup();
+    onSaved.mockImplementation(() => {
+      throw new Error('storage quota');
+    });
+    vi.mocked(api.updateMe).mockResolvedValue(profile);
+
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByText('Изменения сохранены')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('после сохранения показывает значения, нормализованные сервером', async () => {
+    const { user } = setup();
+    vi.mocked(api.updateMe).mockResolvedValue({
+      ...profile,
+      name: 'Иван',
+      email: 'user@example.com',
+    });
+
+    await user.clear(screen.getByLabelText('Имя'));
+    await user.type(screen.getByLabelText('Имя'), '   Иван   ');
+    await user.clear(screen.getByLabelText('Email'));
+    await user.type(screen.getByLabelText('Email'), 'USER@Example.com');
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    await screen.findByText('Изменения сохранены');
+    expect(screen.getByLabelText('Имя')).toHaveValue('Иван');
+    expect(screen.getByLabelText('Email')).toHaveValue('user@example.com');
+  });
+
+  it('повторное нажатие во время отправки не шлёт второй запрос', async () => {
+    const { user } = setup();
+    let resolve!: (value: UserProfile) => void;
+    vi.mocked(api.updateMe).mockReturnValue(
+      new Promise<UserProfile>((r) => (resolve = r)),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await user.type(screen.getByLabelText('Имя'), '{Enter}');
+
+    expect(api.updateMe).toHaveBeenCalledTimes(1);
+    resolve(profile);
+    await screen.findByText('Изменения сохранены');
+  });
 });

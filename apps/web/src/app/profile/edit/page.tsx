@@ -7,7 +7,7 @@ import { Alert, Card, Skeleton } from '@heroui/react';
 import { AppTitle } from '@/components/app-title';
 import { ProfileForm } from '@/components/profile-form';
 import { api, ApiError, type UserProfile } from '@/lib/api';
-import { saveSession, useSession } from '@/lib/session';
+import { getToken, saveSession, useSession } from '@/lib/session';
 
 type State =
   | { kind: 'loading' }
@@ -84,7 +84,10 @@ export default function EditProfilePage() {
               onSaved={(profile) => {
                 setState({ kind: 'ready', profile });
                 // Email в сессии берётся из токена и устаревает после смены.
-                if (token) saveSession({ token, email: profile.email });
+                // Только если сессия та же: выход или 401 во время сохранения не должны её воскресить.
+                if (token && getToken() === token) {
+                  saveSession({ token, email: profile.email });
+                }
               }}
             />
           </Card.Content>
