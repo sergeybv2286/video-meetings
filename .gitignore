@@ -34,3 +34,6 @@ apps/api/storage
 # Ключи и сертификаты
 *.pem
 *.key
+
+# Счётчик итераций Ralph Loop
+.claude/ralph.iterations.json
