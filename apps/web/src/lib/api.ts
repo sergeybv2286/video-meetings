@@ -49,6 +49,13 @@ export interface AuthResult {
   user: { id: string; email: string };
 }
 
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: string;
+}
+
 export interface Meeting {
   id: string;
   title: string;
@@ -176,6 +183,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+  getMe: () => request<UserProfile>('/users/me'),
   listMeetings: () => request<Meeting[]>('/meetings'),
   deleteMeetingFile: (id: string) =>
     request<void>(`/meetings/${id}/file`, { method: 'DELETE' }),
