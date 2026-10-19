@@ -16,6 +16,7 @@ import {
   TextField,
 } from '@heroui/react';
 import { AppTitle } from '@/components/app-title';
+import { UserBadge } from '@/components/user-badge';
 import { api, ApiError, type Meeting } from '@/lib/api';
 import { clearSession, useSession } from '@/lib/session';
 
@@ -76,6 +77,9 @@ export default function HomePage() {
   const { session, loading } = useSession();
   const [meetings, setMeetings] = useState<Meeting[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Имя берём из /users/me: токен и email в сессии могут быть устаревшими.
+  const [name, setName] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [creating, setCreating] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -105,6 +109,23 @@ export default function HomePage() {
     };
   }, [token]);
 
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    api
+      .getMe()
+      .then((profile) => {
+        if (cancelled) return;
+        setName(profile.name);
+        setEmail(profile.email);
+      })
+      // Шапка не критична: при ошибке остаётся email из сессии.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   async function onCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (creating) return;
@@ -129,9 +150,7 @@ export default function HomePage() {
     <main className="mx-auto w-full max-w-2xl flex-1 space-y-8 px-4 py-8">
       <AppTitle />
       <header className="flex flex-wrap items-center justify-between gap-4">
-        <p>
-          Вы вошли как <strong data-testid="user-email">{session.email}</strong>
-        </p>
+        <UserBadge name={name} email={email ?? session.email} />
         <Button
           variant="secondary"
           className="min-h-11"

@@ -49,6 +49,13 @@ export interface AuthResult {
   user: { id: string; email: string };
 }
 
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: string;
+}
+
 export interface Meeting {
   id: string;
   title: string;
@@ -175,6 +182,13 @@ export const api = {
     request<AuthResult>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
+    }),
+  getMe: () => request<UserProfile>('/users/me'),
+  /** Пустая строка в `name` сбрасывает имя. */
+  updateMe: (data: { name?: string; email?: string }) =>
+    request<UserProfile>('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     }),
   listMeetings: () => request<Meeting[]>('/meetings'),
   deleteMeetingFile: (id: string) =>
