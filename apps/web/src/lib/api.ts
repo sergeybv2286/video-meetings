@@ -184,6 +184,12 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   getMe: () => request<UserProfile>('/users/me'),
+  /** Пустая строка в `name` сбрасывает имя. */
+  updateMe: (data: { name?: string; email?: string }) =>
+    request<UserProfile>('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
   listMeetings: () => request<Meeting[]>('/meetings'),
   deleteMeetingFile: (id: string) =>
     request<void>(`/meetings/${id}/file`, { method: 'DELETE' }),
