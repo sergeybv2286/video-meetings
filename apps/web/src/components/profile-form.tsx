@@ -65,6 +65,7 @@ export function ProfileForm({ profile, onSaved }: Props) {
           setSaved(false);
         }}
         maxLength={100}
+        isDisabled={pending}
         autoComplete="name"
       >
         <Label>Имя</Label>
@@ -81,6 +82,7 @@ export function ProfileForm({ profile, onSaved }: Props) {
           setSaved(false);
         }}
         isRequired
+        isDisabled={pending}
         autoComplete="email"
       >
         <Label>Email</Label>

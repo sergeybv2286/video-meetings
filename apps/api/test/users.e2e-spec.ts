@@ -119,6 +119,15 @@ describe('Users (e2e)', () => {
         .expect(200);
     });
 
+    it('токен остаётся действительным после смены пароля', async () => {
+      await http()
+        .put('/users/me/password')
+        .set(auth)
+        .send({ currentPassword: 'secret123', newPassword: 'newsecret456' })
+        .expect(204);
+      await http().get('/users/me').set(auth).expect(200);
+    });
+
     it('400 при неверном текущем пароле', async () => {
       await http()
         .put('/users/me/password')
@@ -149,6 +158,11 @@ describe('Users (e2e)', () => {
         .send({ email: 'a@example.com', password: 'secret123' })
         .expect(401);
       await http().get('/users/me').set(auth).expect(404);
+    });
+
+    it('400 без пароля и аккаунт остаётся', async () => {
+      await http().delete('/users/me').set(auth).send({}).expect(400);
+      await http().get('/users/me').set(auth).expect(200);
     });
 
     it('400 при неверном пароле и аккаунт остаётся', async () => {
