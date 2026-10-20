@@ -34,6 +34,7 @@
 - `DATABASE_URL` — строка подключения к Postgres (по умолчанию локальная БД из Docker Compose)
 - `JWT_SECRET` — секрет токена (по умолчанию dev-значение, в проде обязательно задать)
 - `FILES_STORAGE_DIR` — каталог файлов встреч (по умолчанию `./storage` относительно `apps/api`, в `.gitignore`)
+- `AVATARS_STORAGE_DIR` — каталог аватаров пользователей (по умолчанию `./storage/avatars` относительно `apps/api`; отдельно от `files/` и `tmp/`, чтобы очистка сирот встреч их не трогала). Модель `UserAvatar` (таблица `user_avatars`: `userId` уникален, FK на `users` с `ON DELETE CASCADE`, `mimeType`, `size`, `storageKey`, `updatedAt`); эндпоинты — в следующих задачах фазы 3
 - `MEETING_FILE_MAX_SIZE` — лимит размера файла встречи в байтах (по умолчанию 524288000 = 500 МБ, максимум 2147483647 — колонка `size` типа Int)
 - `WEB_ORIGIN` — разрешённый origin для CORS (по умолчанию `http://localhost:3000`)
 
