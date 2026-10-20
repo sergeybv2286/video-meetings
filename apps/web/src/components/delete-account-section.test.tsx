@@ -47,6 +47,17 @@ describe('удаление аккаунта', () => {
     expect(clearSession).toHaveBeenCalled();
   });
 
+  it('Enter в поле пароля подтверждает удаление', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.deleteAccount).mockResolvedValue(undefined);
+    render(<DeleteAccountSection />);
+
+    await user.click(screen.getByRole('button', { name: 'Удалить аккаунт' }));
+    await user.type(await screen.findByLabelText('Пароль'), 'secret123{Enter}');
+
+    expect(api.deleteAccount).toHaveBeenCalledWith('secret123');
+  });
+
   it('при неверном пароле показывает ошибку, не выходит и оставляет диалог', async () => {
     const user = userEvent.setup();
     vi.mocked(api.deleteAccount).mockRejectedValue(

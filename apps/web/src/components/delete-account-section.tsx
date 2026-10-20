@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertDialog,
   Button,
   FieldError,
+  Form,
   Input,
   Label,
   TextField,
@@ -21,7 +22,8 @@ export function DeleteAccountSection() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function remove() {
+  async function remove(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (deleting) return;
     setDeleting(true);
     setError(null);
@@ -74,45 +76,50 @@ export function DeleteAccountSection() {
               <AlertDialog.Icon status="danger" />
               <AlertDialog.Heading>Удалить аккаунт?</AlertDialog.Heading>
             </AlertDialog.Header>
-            <AlertDialog.Body className="space-y-3">
-              <p>Введите пароль, чтобы подтвердить удаление аккаунта.</p>
-              <TextField
-                name="password"
-                type="password"
-                value={password}
-                onChange={setPassword}
-                isRequired
-                autoComplete="current-password"
-              >
-                <Label>Пароль</Label>
-                <Input />
-                <FieldError />
-              </TextField>
-              {error && (
-                <p role="alert" className="text-sm text-danger">
-                  {error}
-                </p>
-              )}
-            </AlertDialog.Body>
-            <AlertDialog.Footer>
-              <Button
-                slot="close"
-                variant="tertiary"
-                className="min-h-11"
-                isDisabled={deleting}
-              >
-                Отмена
-              </Button>
-              <Button
-                variant="danger"
-                className="min-h-11"
-                isPending={deleting}
-                isDisabled={password === ''}
-                onPress={() => void remove()}
-              >
-                {deleting ? 'Удаляем…' : 'Удалить аккаунт'}
-              </Button>
-            </AlertDialog.Footer>
+            <Form onSubmit={remove}>
+              <AlertDialog.Body className="space-y-3">
+                <p>Введите пароль, чтобы подтвердить удаление аккаунта.</p>
+                <TextField
+                  name="password"
+                  type="password"
+                  value={password}
+                  onChange={(value) => {
+                    setPassword(value);
+                    setError(null);
+                  }}
+                  isRequired
+                  autoComplete="current-password"
+                >
+                  <Label>Пароль</Label>
+                  <Input />
+                  <FieldError />
+                </TextField>
+                {error && (
+                  <p role="alert" className="text-sm text-danger">
+                    {error}
+                  </p>
+                )}
+              </AlertDialog.Body>
+              <AlertDialog.Footer>
+                <Button
+                  slot="close"
+                  variant="tertiary"
+                  className="min-h-11"
+                  isDisabled={deleting}
+                >
+                  Отмена
+                </Button>
+                <Button
+                  type="submit"
+                  variant="danger"
+                  className="min-h-11"
+                  isPending={deleting}
+                  isDisabled={password === ''}
+                >
+                  {deleting ? 'Удаляем…' : 'Удалить аккаунт'}
+                </Button>
+              </AlertDialog.Footer>
+            </Form>
           </AlertDialog.Dialog>
         </AlertDialog.Container>
       </AlertDialog.Backdrop>

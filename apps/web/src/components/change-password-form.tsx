@@ -55,6 +55,7 @@ export function ChangePasswordForm() {
         onChange={(value) => {
           setCurrentPassword(value);
           setSaved(false);
+          setError(null);
         }}
         isRequired
         autoComplete="current-password"
@@ -71,6 +72,7 @@ export function ChangePasswordForm() {
         onChange={(value) => {
           setNewPassword(value);
           setSaved(false);
+          setError(null);
         }}
         isRequired
         autoComplete="new-password"
