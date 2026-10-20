@@ -84,18 +84,23 @@ function errorMessage(body: unknown): string {
   return typeof message === 'string' ? message : 'Что-то пошло не так';
 }
 
+export interface AvatarUploadResult {
+  mimeType: string;
+  size: number;
+  updatedAt: string;
+}
+
 /**
  * Загрузка файла напрямую в API (другой origin, CORS настроен на сервере). Через XHR, а не
  * fetch: только он отдаёт прогресс отправки. Отмена — через `signal`.
  */
-export function uploadMeetingFile(
-  meetingId: string,
+function uploadFile<T>(
+  path: string,
+  method: 'POST' | 'PUT',
   file: File,
   onProgress: (percent: number) => void,
   signal?: AbortSignal,
-  /** `POST` — первая загрузка, `PUT` — замена существующего файла. */
-  method: 'POST' | 'PUT' = 'POST',
-): Promise<MeetingFile> {
+): Promise<T> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new DOMException('Загрузка отменена', 'AbortError'));
@@ -104,7 +109,7 @@ export function uploadMeetingFile(
     const xhr = new XMLHttpRequest();
     const onAbort = () => xhr.abort();
     const cleanup = () => signal?.removeEventListener('abort', onAbort);
-    xhr.open(method, `${API_URL}/meetings/${meetingId}/file`);
+    xhr.open(method, `${API_URL}${path}`);
     const token = getToken();
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.upload.onprogress = (event) => {
@@ -121,7 +126,7 @@ export function uploadMeetingFile(
         // Ответ не JSON — покажем общее сообщение.
       }
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(body as MeetingFile);
+        resolve(body as T);
         return;
       }
       if (xhr.status === 401 && token) clearSession();
@@ -145,6 +150,32 @@ export function uploadMeetingFile(
     form.append('file', file);
     xhr.send(form);
   });
+}
+
+export function uploadMeetingFile(
+  meetingId: string,
+  file: File,
+  onProgress: (percent: number) => void,
+  signal?: AbortSignal,
+  /** `POST` — первая загрузка, `PUT` — замена существующего файла. */
+  method: 'POST' | 'PUT' = 'POST',
+): Promise<MeetingFile> {
+  return uploadFile(
+    `/meetings/${meetingId}/file`,
+    method,
+    file,
+    onProgress,
+    signal,
+  );
+}
+
+/** Загрузка или замена аватара текущего пользователя (`PUT /users/me/avatar`). */
+export function uploadAvatar(
+  file: File,
+  onProgress: (percent: number) => void,
+  signal?: AbortSignal,
+): Promise<AvatarUploadResult> {
+  return uploadFile('/users/me/avatar', 'PUT', file, onProgress, signal);
 }
 
 /**
@@ -196,6 +227,7 @@ export const api = {
       throw new ApiError('Не удалось загрузить аватар: соединение прервано', 0);
     }
   },
+  deleteAvatar: () => request<void>('/users/me/avatar', { method: 'DELETE' }),
   /** Пустая строка в `name` сбрасывает имя. */
   updateMe: (data: { name?: string; email?: string }) =>
     request<UserProfile>('/users/me', {
