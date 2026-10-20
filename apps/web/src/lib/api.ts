@@ -190,6 +190,16 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>('/users/me/password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  deleteAccount: (password: string) =>
+    request<void>('/users/me', {
+      method: 'DELETE',
+      body: JSON.stringify({ password }),
+    }),
   listMeetings: () => request<Meeting[]>('/meetings'),
   deleteMeetingFile: (id: string) =>
     request<void>(`/meetings/${id}/file`, { method: 'DELETE' }),
