@@ -14,7 +14,10 @@ vi.mock('@/lib/session', () => ({ useSession: vi.fn() }));
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/api')>();
-  return { ...original, api: { ...original.api, getMe: vi.fn() } };
+  return {
+    ...original,
+    api: { ...original.api, getMe: vi.fn(), getAvatar: vi.fn() },
+  };
 });
 
 const profile: UserProfile = {
@@ -22,6 +25,8 @@ const profile: UserProfile = {
   email: 'ivan@example.com',
   name: 'Иван Петров',
   createdAt: '2026-10-01T10:00:00.000Z',
+  hasAvatar: false,
+  avatarUpdatedAt: null,
 };
 
 function signedIn() {
@@ -57,6 +62,49 @@ describe('страница профиля', () => {
       'I',
     );
     expect(screen.getByText('Имя не указано')).toBeInTheDocument();
+  });
+
+  it('с аватаром показывает изображение вместо инициалов', async () => {
+    signedIn();
+    URL.createObjectURL = vi.fn(() => 'blob:avatar');
+    URL.revokeObjectURL = vi.fn();
+    vi.mocked(api.getMe).mockResolvedValue({
+      ...profile,
+      hasAvatar: true,
+      avatarUpdatedAt: '2026-10-02T10:00:00.000Z',
+    });
+    vi.mocked(api.getAvatar).mockResolvedValue(new Blob(['x']));
+    render(<ProfilePage />);
+
+    expect(await screen.findByTestId('avatar-image')).toHaveAttribute(
+      'src',
+      'blob:avatar',
+    );
+    expect(api.getAvatar).toHaveBeenCalledWith('u1');
+    expect(screen.queryByTestId('avatar-placeholder')).not.toBeInTheDocument();
+  });
+
+  it('при повторном открытии показывает актуальный аватар без повторного входа', async () => {
+    signedIn();
+    URL.createObjectURL = vi.fn(() => 'blob:avatar');
+    URL.revokeObjectURL = vi.fn();
+    vi.mocked(api.getMe).mockResolvedValueOnce({
+      ...profile,
+      hasAvatar: true,
+      avatarUpdatedAt: '2026-10-02T10:00:00.000Z',
+    });
+    vi.mocked(api.getAvatar).mockResolvedValue(new Blob(['x']));
+    const first = render(<ProfilePage />);
+    await screen.findByTestId('avatar-image');
+    first.unmount();
+
+    // Аватар удалили на /profile/edit — страница запрашивает профиль заново.
+    vi.mocked(api.getMe).mockResolvedValueOnce(profile);
+    render(<ProfilePage />);
+
+    expect(await screen.findByTestId('avatar-placeholder')).toBeInTheDocument();
+    expect(screen.queryByTestId('avatar-image')).not.toBeInTheDocument();
+    expect(api.getMe).toHaveBeenCalledTimes(2);
   });
 
   it('неавторизованного перенаправляет на вход и не запрашивает профиль', async () => {

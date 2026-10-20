@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Alert, Card, Skeleton } from '@heroui/react';
 import { AppTitle } from '@/components/app-title';
-import { AvatarPlaceholder } from '@/components/avatar-placeholder';
+import { Avatar } from '@/components/avatar';
 import { api, ApiError, type UserProfile } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
@@ -75,7 +75,10 @@ export default function ProfilePage() {
       )}
       {state.kind === 'ready' && (
         <Card className="flex-col items-start gap-6 p-6 sm:flex-row sm:items-center">
-          <AvatarPlaceholder
+          <Avatar
+            userId={state.profile.id}
+            hasAvatar={state.profile.hasAvatar}
+            avatarUpdatedAt={state.profile.avatarUpdatedAt}
             name={state.profile.name}
             email={state.profile.email}
           />

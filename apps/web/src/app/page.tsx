@@ -16,7 +16,7 @@ import {
   TextField,
 } from '@heroui/react';
 import { AppTitle } from '@/components/app-title';
-import { UserBadge } from '@/components/user-badge';
+import { UserBadge, type AvatarInfo } from '@/components/user-badge';
 import { api, ApiError, type Meeting } from '@/lib/api';
 import { clearSession, useSession } from '@/lib/session';
 
@@ -80,6 +80,7 @@ export default function HomePage() {
   // Имя берём из /users/me: токен и email в сессии могут быть устаревшими.
   const [name, setName] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [avatar, setAvatar] = useState<AvatarInfo | null>(null);
   const [title, setTitle] = useState('');
   const [creating, setCreating] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -118,6 +119,11 @@ export default function HomePage() {
         if (cancelled) return;
         setName(profile.name);
         setEmail(profile.email);
+        setAvatar({
+          userId: profile.id,
+          hasAvatar: profile.hasAvatar,
+          avatarUpdatedAt: profile.avatarUpdatedAt,
+        });
       })
       // Шапка не критична: при ошибке остаётся email из сессии.
       .catch(() => undefined);
@@ -150,7 +156,7 @@ export default function HomePage() {
     <main className="mx-auto w-full max-w-2xl flex-1 space-y-8 px-4 py-8">
       <AppTitle />
       <header className="flex flex-wrap items-center justify-between gap-4">
-        <UserBadge name={name} email={email ?? session.email} />
+        <UserBadge name={name} email={email ?? session.email} avatar={avatar} />
         <Button
           variant="secondary"
           className="min-h-11"
