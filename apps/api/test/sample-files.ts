@@ -97,3 +97,26 @@ export const samples = {
   /** Windows-исполняемый файл, переименованный в запись встречи. */
   exe: () => pad(Buffer.from('MZ\x90\x00\x03\x00\x00\x00', 'latin1'), 256),
 };
+
+/** Минимальные образцы изображений для тестов аватара. */
+export const imageSamples = {
+  jpeg: () =>
+    pad(
+      Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]),
+    ),
+  png: () =>
+    pad(
+      Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        Buffer.from([0x00, 0x00, 0x00, 0x0d]),
+        ascii('IHDR'),
+      ]),
+    ),
+  webp: () => {
+    const b = Buffer.alloc(64);
+    b.write('RIFF', 0, 'latin1');
+    b.writeUInt32LE(56, 4);
+    b.write('WEBPVP8 ', 8, 'latin1');
+    return b;
+  },
+};
