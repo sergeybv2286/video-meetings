@@ -84,6 +84,29 @@ describe('страница профиля', () => {
     expect(screen.queryByTestId('avatar-placeholder')).not.toBeInTheDocument();
   });
 
+  it('при повторном открытии показывает актуальный аватар без повторного входа', async () => {
+    signedIn();
+    URL.createObjectURL = vi.fn(() => 'blob:avatar');
+    URL.revokeObjectURL = vi.fn();
+    vi.mocked(api.getMe).mockResolvedValueOnce({
+      ...profile,
+      hasAvatar: true,
+      avatarUpdatedAt: '2026-10-02T10:00:00.000Z',
+    });
+    vi.mocked(api.getAvatar).mockResolvedValue(new Blob(['x']));
+    const first = render(<ProfilePage />);
+    await screen.findByTestId('avatar-image');
+    first.unmount();
+
+    // Аватар удалили на /profile/edit — страница запрашивает профиль заново.
+    vi.mocked(api.getMe).mockResolvedValueOnce(profile);
+    render(<ProfilePage />);
+
+    expect(await screen.findByTestId('avatar-placeholder')).toBeInTheDocument();
+    expect(screen.queryByTestId('avatar-image')).not.toBeInTheDocument();
+    expect(api.getMe).toHaveBeenCalledTimes(2);
+  });
+
   it('неавторизованного перенаправляет на вход и не запрашивает профиль', async () => {
     vi.mocked(useSession).mockReturnValue({ session: null, loading: false });
     render(<ProfilePage />);
