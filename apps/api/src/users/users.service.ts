@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, type User } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { AvatarsService } from '../avatars/avatars.service.js';
 import { hashPassword, verifyPassword } from '../auth/password.js';
 import type { UpdateProfileDto } from './users.dto.js';
 
@@ -17,18 +18,35 @@ export interface UserProfile {
   email: string;
   name: string | null;
   createdAt: Date;
+  hasAvatar: boolean;
+  /** Время последнего изменения аватара (для сброса кэша); `null`, если аватара нет. */
+  avatarUpdatedAt: Date | null;
 }
+
+type UserWithAvatar = User & { avatar: { updatedAt: Date } | null };
+
+const WITH_AVATAR = { avatar: { select: { updatedAt: true } } } as const;
 
 const SEARCH_LIMIT = 20;
 
-export function toProfile(user: User): UserProfile {
-  const { id, email, name, createdAt } = user;
-  return { id, email, name, createdAt };
+export function toProfile(user: UserWithAvatar): UserProfile {
+  const { id, email, name, createdAt, avatar } = user;
+  return {
+    id,
+    email,
+    name,
+    createdAt,
+    hasAvatar: avatar !== null,
+    avatarUpdatedAt: avatar?.updatedAt ?? null,
+  };
 }
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly avatars: AvatarsService,
+  ) {}
 
   findByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { email: normalize(email) } });
@@ -41,7 +59,12 @@ export class UsersService {
   }
 
   async getProfile(id: string): Promise<UserProfile> {
-    return toProfile(await this.getOrFail(id));
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: WITH_AVATAR,
+    });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    return toProfile(user);
   }
 
   /** Поиск по части email или имени (без учёта регистра), для приглашения участников. */
@@ -56,6 +79,7 @@ export class UsersService {
             ],
           }
         : undefined,
+      include: WITH_AVATAR,
       orderBy: { email: 'asc' },
       take: SEARCH_LIMIT,
     });
@@ -67,7 +91,13 @@ export class UsersService {
     if (dto.email !== undefined) data.email = normalize(dto.email);
     if (dto.name !== undefined) data.name = dto.name.trim() || null;
     try {
-      return toProfile(await this.prisma.user.update({ where: { id }, data }));
+      return toProfile(
+        await this.prisma.user.update({
+          where: { id },
+          data,
+          include: WITH_AVATAR,
+        }),
+      );
     } catch (error) {
       throw mapPrismaError(error);
     }
@@ -93,7 +123,12 @@ export class UsersService {
     if (!verifyPassword(password, user.passwordHash)) {
       throw new BadRequestException('Неверный пароль');
     }
+    const avatar = await this.prisma.userAvatar.findUnique({
+      where: { userId: id },
+    });
     await this.prisma.user.delete({ where: { id } });
+    // Запись аватара удалена каскадом; файл чистим после удаления аккаунта.
+    if (avatar) await this.avatars.removeFromDisk(avatar.storageKey);
   }
 
   private async getOrFail(id: string): Promise<User> {

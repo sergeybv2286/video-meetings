@@ -104,7 +104,7 @@ export class AvatarsService {
   }
 
   /** Сбой удаления не должен перекрывать исходную ошибку. */
-  private async removeFromDisk(storageKey: string): Promise<void> {
+  async removeFromDisk(storageKey: string): Promise<void> {
     try {
       await rm(resolveAvatarPath(storageKey), { force: true });
     } catch (error) {

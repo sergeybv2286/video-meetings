@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
+import { AvatarsModule } from '../avatars/avatars.module.js';
 import { UsersController } from './users.controller.js';
 import { UsersService } from './users.service.js';
 
 @Module({
+  imports: [AvatarsModule],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],

@@ -1,10 +1,13 @@
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { mkdir, readdir, rm } from 'node:fs/promises';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
 import { setupApp } from './../src/setup-app.js';
+import { imageSamples } from './sample-files.js';
+import { TEST_AVATARS_DIR } from './test-storage.js';
 
 describe('Users (e2e)', () => {
   let app: INestApplication<App>;
@@ -24,6 +27,8 @@ describe('Users (e2e)', () => {
   const http = () => request(app.getHttpServer());
 
   beforeEach(async () => {
+    await rm(TEST_AVATARS_DIR, { recursive: true, force: true });
+    await mkdir(TEST_AVATARS_DIR, { recursive: true });
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -56,6 +61,29 @@ describe('Users (e2e)', () => {
         email: 'a@example.com',
         name: null,
         createdAt: expect.any(String),
+        hasAvatar: false,
+        avatarUpdatedAt: null,
+      });
+    });
+
+    it('показывает признак аватара после загрузки и сбрасывает после удаления', async () => {
+      await http()
+        .put('/users/me/avatar')
+        .set(auth)
+        .attach('file', imageSamples.png(), 'me.png')
+        .expect(200);
+
+      const { body } = await http().get('/users/me').set(auth).expect(200);
+      expect(body).toMatchObject({
+        hasAvatar: true,
+        avatarUpdatedAt: expect.any(String),
+      });
+
+      await http().delete('/users/me/avatar').set(auth).expect(204);
+      const after = await http().get('/users/me').set(auth).expect(200);
+      expect(after.body).toMatchObject({
+        hasAvatar: false,
+        avatarUpdatedAt: null,
       });
     });
   });
@@ -160,6 +188,39 @@ describe('Users (e2e)', () => {
       await http().get('/users/me').set(auth).expect(404);
     });
 
+    it('удаляет файл аватара с диска вместе с аккаунтом', async () => {
+      await http()
+        .put('/users/me/avatar')
+        .set(auth)
+        .attach('file', imageSamples.png(), 'me.png')
+        .expect(200);
+      expect(await readdir(TEST_AVATARS_DIR)).toHaveLength(1);
+
+      await http()
+        .delete('/users/me')
+        .set(auth)
+        .send({ password: 'secret123' })
+        .expect(204);
+
+      expect(await readdir(TEST_AVATARS_DIR)).toHaveLength(0);
+    });
+
+    it('при неверном пароле файл аватара остаётся', async () => {
+      await http()
+        .put('/users/me/avatar')
+        .set(auth)
+        .attach('file', imageSamples.png(), 'me.png')
+        .expect(200);
+
+      await http()
+        .delete('/users/me')
+        .set(auth)
+        .send({ password: 'wrong-pass' })
+        .expect(400);
+
+      expect(await readdir(TEST_AVATARS_DIR)).toHaveLength(1);
+    });
+
     it('400 без пароля и аккаунт остаётся', async () => {
       await http().delete('/users/me').set(auth).send({}).expect(400);
       await http().get('/users/me').set(auth).expect(200);
@@ -182,7 +243,12 @@ describe('Users (e2e)', () => {
         .get(`/users/${b.user.id}`)
         .set(auth)
         .expect(200);
-      expect(body).toMatchObject({ id: b.user.id, email: 'b@example.com' });
+      expect(body).toMatchObject({
+        id: b.user.id,
+        email: 'b@example.com',
+        hasAvatar: false,
+        avatarUpdatedAt: null,
+      });
       expect(body).not.toHaveProperty('passwordHash');
     });
 
