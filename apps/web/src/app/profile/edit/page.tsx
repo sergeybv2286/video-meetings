@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Alert, Card, Skeleton } from '@heroui/react';
 import { AppTitle } from '@/components/app-title';
+import { ChangePasswordForm } from '@/components/change-password-form';
+import { DeleteAccountSection } from '@/components/delete-account-section';
 import { ProfileForm } from '@/components/profile-form';
 import { api, ApiError, type UserProfile } from '@/lib/api';
 import { getToken, saveSession, useSession } from '@/lib/session';
@@ -90,6 +92,26 @@ export default function EditProfilePage() {
                 }
               }}
             />
+          </Card.Content>
+        </Card>
+      )}
+      {state.kind === 'ready' && (
+        <Card className="p-6">
+          <Card.Header>
+            <Card.Title>Смена пароля</Card.Title>
+          </Card.Header>
+          <Card.Content>
+            <ChangePasswordForm />
+          </Card.Content>
+        </Card>
+      )}
+      {state.kind === 'ready' && (
+        <Card className="p-6">
+          <Card.Header>
+            <Card.Title>Удаление аккаунта</Card.Title>
+          </Card.Header>
+          <Card.Content>
+            <DeleteAccountSection />
           </Card.Content>
         </Card>
       )}
