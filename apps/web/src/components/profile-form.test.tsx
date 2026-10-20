@@ -14,6 +14,8 @@ const profile: UserProfile = {
   email: 'ivan@example.com',
   name: 'Иван Петров',
   createdAt: '2026-10-01T10:00:00.000Z',
+  hasAvatar: false,
+  avatarUpdatedAt: null,
 };
 
 function setup(initial: UserProfile = profile) {

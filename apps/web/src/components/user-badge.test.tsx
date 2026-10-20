@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from '@/lib/api';
 import { UserBadge } from './user-badge';
 
 afterEach(cleanup);
@@ -23,6 +24,24 @@ describe('UserBadge', () => {
     expect(screen.queryByTestId('user-name')).not.toBeInTheDocument();
     expect(screen.getByTestId('user-email')).toHaveTextContent(
       'zed@example.com',
+    );
+  });
+
+  it('с аватаром показывает изображение', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:avatar');
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(api, 'getAvatar').mockResolvedValue(new Blob(['x']));
+    render(
+      <UserBadge
+        name="Иван"
+        email="ivan@example.com"
+        avatar={{ userId: 'u1', hasAvatar: true, avatarUpdatedAt: '1' }}
+      />,
+    );
+
+    expect(await screen.findByTestId('avatar-image')).toHaveAttribute(
+      'src',
+      'blob:avatar',
     );
   });
 

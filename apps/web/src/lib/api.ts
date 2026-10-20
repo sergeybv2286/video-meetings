@@ -54,6 +54,9 @@ export interface UserProfile {
   email: string;
   name: string | null;
   createdAt: string;
+  hasAvatar: boolean;
+  /** Меняется при замене и удалении аватара. */
+  avatarUpdatedAt: string | null;
 }
 
 export interface Meeting {
@@ -184,6 +187,15 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   getMe: () => request<UserProfile>('/users/me'),
+  /** Изображение аватара; эндпоинт требует JWT, поэтому `<img src>` напрямую не подходит. */
+  getAvatar: async (userId: string): Promise<Blob> => {
+    const response = await send(`/users/${userId}/avatar`, {});
+    try {
+      return await response.blob();
+    } catch {
+      throw new ApiError('Не удалось загрузить аватар: соединение прервано', 0);
+    }
+  },
   /** Пустая строка в `name` сбрасывает имя. */
   updateMe: (data: { name?: string; email?: string }) =>
     request<UserProfile>('/users/me', {
