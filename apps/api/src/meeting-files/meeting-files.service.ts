@@ -175,6 +175,14 @@ export class MeetingFilesService {
         `Не удалось поставить в очередь файл ${file.id}`,
         error,
       );
+      // Прежний результат относился к старому файлу: лучше без него, чем с чужим текстом.
+      try {
+        await this.prisma.meetingFileTranscription.deleteMany({
+          where: { meetingFileId: file.id },
+        });
+      } catch {
+        // БД недоступна — остаток подчистит следующая постановка.
+      }
       return toMeetingFileDto(file);
     }
   }

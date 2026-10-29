@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { TranscriptionStatus } from '../../generated/prisma/client.js';
+import type {
+  Prisma,
+  TranscriptionStatus,
+} from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { resolveStoragePath } from '../meeting-file.config.js';
 import {
@@ -11,6 +14,7 @@ import {
   TranscriptionRunner,
 } from './transcription-runner.js';
 
+const WRITE_ATTEMPTS = 3;
 const GENERIC_ERROR = 'Не удалось выполнить транскрибацию';
 const TIMEOUT_ERROR =
   'Превышено максимальное время обработки файла. Попробуйте повторить позже';
@@ -114,18 +118,37 @@ export class TranscriptionQueue {
   private push(meetingFileId: string): void {
     if (!this.pending.includes(meetingFileId)) this.pending.push(meetingFileId);
     if (this.draining) return;
-    this.draining = this.drain().finally(() => {
-      this.draining = null;
-    });
+    this.draining = this.drain();
   }
 
   private async drain(): Promise<void> {
-    for (let id = this.pending.shift(); id; id = this.pending.shift()) {
+    try {
+      for (let id = this.pending.shift(); id; id = this.pending.shift()) {
+        try {
+          await this.process(id);
+        } catch (error) {
+          // Сбой одной задачи (например, БД) не должен останавливать очередь.
+          this.logger.error(`Сбой обработки транскрибации ${id}`, error);
+        }
+      }
+    } finally {
+      // Синхронно с выходом из цикла: новый `push` не может «проскочить» между ними.
+      this.draining = null;
+    }
+  }
+
+  /** Запись результата переживает короткие сбои БД: иначе задача навсегда осталась бы «В процессе». */
+  private async writeResult(
+    where: Prisma.MeetingFileTranscriptionWhereInput,
+    data: Prisma.MeetingFileTranscriptionUpdateManyMutationInput,
+  ): Promise<void> {
+    for (let attempt = 1; ; attempt++) {
       try {
-        await this.process(id);
+        await this.prisma.meetingFileTranscription.updateMany({ where, data });
+        return;
       } catch (error) {
-        // Сбой одной задачи (например, БД) не должен останавливать очередь.
-        this.logger.error(`Сбой обработки транскрибации ${id}`, error);
+        if (attempt === WRITE_ATTEMPTS) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
       }
     }
   }
@@ -160,9 +183,11 @@ export class TranscriptionQueue {
         controller.signal,
       );
       if (controller.signal.aborted) throw new Error('Задача прервана');
-      await this.prisma.meetingFileTranscription.updateMany({
-        where: target,
-        data: { status: 'DONE', text, error: null, completedAt: new Date() },
+      await this.writeResult(target, {
+        status: 'DONE',
+        text,
+        error: null,
+        completedAt: new Date(),
       });
     } catch (error) {
       const reason: unknown = controller.signal.aborted
@@ -180,10 +205,7 @@ export class TranscriptionQueue {
         `Транскрибация файла ${meetingFileId} не удалась`,
         error,
       );
-      await this.prisma.meetingFileTranscription.updateMany({
-        where: target,
-        data: { status: 'FAILED', error: message },
-      });
+      await this.writeResult(target, { status: 'FAILED', error: message });
     } finally {
       clearTimeout(timer);
       this.running = null;

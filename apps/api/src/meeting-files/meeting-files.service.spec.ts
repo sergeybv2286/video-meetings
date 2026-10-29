@@ -81,6 +81,25 @@ describe('MeetingFilesService', () => {
     expect(enqueue).toHaveBeenCalledWith(row);
   });
 
+  it('сбой постановки при замене сбрасывает прежний результат', async () => {
+    enqueue.mockRejectedValue(new Error('БД недоступна'));
+    const deleteMany = vi.fn().mockResolvedValue({ count: 1 });
+    const create = vi.fn().mockResolvedValue(row);
+    const service = new MeetingFilesService(
+      {
+        meetingFile: { create },
+        meetingFileTranscription: { deleteMany },
+      } as unknown as PrismaService,
+      { enqueue, cancel } as unknown as TranscriptionQueue,
+    );
+
+    await service.create(meetingId, storedFile);
+
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { meetingFileId: row.id },
+    });
+  });
+
   it('create: сбой постановки в очередь не отменяет загрузку', async () => {
     enqueue.mockRejectedValue(new Error('БД недоступна'));
     const create = vi.fn().mockResolvedValue(row);

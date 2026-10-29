@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Chip, Spinner } from '@heroui/react';
 import {
   api,
@@ -55,6 +55,8 @@ export function TranscriptionSection({ file }: { file: MeetingFile }) {
   const [retrying, setRetrying] = useState(false);
   // Растёт после «Повторить» и «Обновить»: эффект опроса стартует заново.
   const [syncs, setSyncs] = useState(0);
+  // Задача известна как активная (после «Повторить»): первая неудача опроса его не прекращает.
+  const activeRef = useRef(false);
 
   const supported = file.transcriptionStatus !== null;
   const meetingId = file.meetingId;
@@ -65,7 +67,7 @@ export function TranscriptionSection({ file }: { file: MeetingFile }) {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     // Без ответа продолжаем опрос только для задачи в работе.
-    let keepPolling = isActive(initialStatus);
+    let keepPolling = isActive(initialStatus) || activeRef.current;
 
     async function tick() {
       try {
@@ -74,6 +76,7 @@ export function TranscriptionSection({ file }: { file: MeetingFile }) {
         setTranscription(next);
         setLoadError(null);
         keepPolling = isActive(next.status);
+        activeRef.current = keepPolling;
       } catch (e) {
         if (cancelled) return;
         if (e instanceof ApiError && e.status === 404) {
@@ -113,6 +116,7 @@ export function TranscriptionSection({ file }: { file: MeetingFile }) {
     setActionError(null);
     try {
       setTranscription(await api.retryTranscription(meetingId));
+      activeRef.current = true;
       setLoadError(null);
       setSyncs((n) => n + 1);
     } catch (e) {

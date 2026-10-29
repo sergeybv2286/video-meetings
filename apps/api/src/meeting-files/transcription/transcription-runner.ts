@@ -70,6 +70,9 @@ export class WhisperTranscriptionRunner extends TranscriptionRunner {
         getFfmpegCommand(),
         [
           '-nostdin',
+          '-nostats',
+          '-loglevel',
+          'error',
           '-y',
           '-i',
           filePath,
@@ -96,6 +99,8 @@ export class WhisperTranscriptionRunner extends TranscriptionRunner {
           '--output_dir',
           workDir,
           '--fp16',
+          'False',
+          '--verbose',
           'False',
           ...(modelDir ? ['--model_dir', modelDir] : []),
         ],

@@ -91,6 +91,7 @@ function makeDb() {
   return {
     prisma: prisma as unknown as PrismaService,
     upsert: prisma.meetingFileTranscription.upsert,
+    updateMany: prisma.meetingFileTranscription.updateMany,
     rows,
     history,
   };
@@ -443,5 +444,42 @@ describe('TranscriptionQueue', () => {
         expect(rows.get('a')?.status).toBe(status);
       },
     );
+
+    it('короткий сбой БД при записи результата не оставляет задачу «В процессе»', async () => {
+      const { prisma, rows, updateMany: update } = makeDb();
+      const original = update.getMockImplementation()!;
+      // Первые два вызова — claim и сам результат: падает запись результата.
+      update
+        .mockImplementationOnce(original)
+        .mockRejectedValueOnce(new Error('db blip'))
+        .mockRejectedValueOnce(new Error('db blip'));
+      const runner = { run: vi.fn().mockResolvedValue('текст') };
+      const queue = new TranscriptionQueue(
+        prisma,
+        runner as unknown as TranscriptionRunner,
+      );
+
+      await queue.enqueue(mp4('a'));
+      await queue.onIdle();
+
+      expect(rows.get('a')).toMatchObject({ status: 'DONE', text: 'текст' });
+    });
+
+    it('постановка сразу после опустошения очереди запускается', async () => {
+      const { prisma, rows } = makeDb();
+      const runner = { run: vi.fn().mockResolvedValue('текст') };
+      const queue = new TranscriptionQueue(
+        prisma,
+        runner as unknown as TranscriptionRunner,
+      );
+
+      await queue.enqueue(mp4('a'));
+      // Ждём завершения первой задачи и сразу ставим вторую, не вызывая onIdle.
+      await vi.waitFor(() => expect(rows.get('a')?.status).toBe('DONE'));
+      await queue.enqueue(mp4('b'));
+      await queue.onIdle();
+
+      expect(rows.get('b')?.status).toBe('DONE');
+    });
   });
 });

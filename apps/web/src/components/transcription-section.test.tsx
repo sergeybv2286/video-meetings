@@ -353,4 +353,25 @@ describe('TranscriptionSection: действия', () => {
       'Готово',
     );
   });
+
+  it('после «Повторить» сбой первого опроса не прекращает опрос', async () => {
+    vi.mocked(api.getTranscription)
+      .mockResolvedValueOnce(tr({ status: 'FAILED', error: 'Сбой' }))
+      .mockRejectedValueOnce(new ApiError('Не удалось связаться с сервером', 0))
+      .mockResolvedValue(tr({ status: 'DONE', text: 'Готово после сбоя' }));
+    vi.mocked(api.retryTranscription).mockResolvedValue(
+      tr({ status: 'QUEUED' }),
+    );
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    setup({ ...file, transcriptionStatus: 'FAILED' });
+    await flush();
+
+    await user.click(screen.getByRole('button', { name: 'Повторить' }));
+    await flush();
+    await advance(POLL_INTERVAL_MS);
+
+    expect(screen.getByTestId('transcription-text')).toHaveTextContent(
+      'Готово после сбоя',
+    );
+  });
 });

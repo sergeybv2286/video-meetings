@@ -346,16 +346,14 @@ describe('транскрибация', () => {
   });
 
   it('retryTranscription шлёт POST на /retry', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse({
-          status: 'QUEUED',
-          text: null,
-          error: null,
-          completedAt: null,
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        status: 'QUEUED',
+        text: null,
+        error: null,
+        completedAt: null,
+      }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await api.retryTranscription('m1');
@@ -369,17 +367,15 @@ describe('транскрибация', () => {
   it('ошибка API приходит русским ApiError', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          jsonResponse(
-            {
-              message:
-                'Повторить можно только транскрибацию со статусом «Ошибка»',
-            },
-            409,
-          ),
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          {
+            message:
+              'Повторить можно только транскрибацию со статусом «Ошибка»',
+          },
+          409,
         ),
+      ),
     );
 
     await expect(api.retryTranscription('m1')).rejects.toMatchObject({
