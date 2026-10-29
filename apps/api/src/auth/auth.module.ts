@@ -7,6 +7,7 @@ import { AuthTokenService } from './auth-token.service.js';
 import { RegisterUserHandler } from './commands/register-user.handler.js';
 import { LoginHandler } from './queries/login.handler.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
+import { getJwtSecret } from './jwt-secret.js';
 
 @Global()
 @Module({
@@ -14,8 +15,8 @@ import { JwtAuthGuard } from './jwt-auth.guard.js';
     CqrsModule,
     UsersModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'dev-secret-change-me',
-      signOptions: { expiresIn: '7d' },
+      secret: getJwtSecret(),
+      signOptions: { expiresIn: '7d', algorithm: 'HS256' },
     }),
   ],
   controllers: [AuthController],
@@ -25,6 +26,6 @@ import { JwtAuthGuard } from './jwt-auth.guard.js';
     LoginHandler,
     JwtAuthGuard,
   ],
-  exports: [JwtModule, JwtAuthGuard],
+  exports: [JwtModule, JwtAuthGuard, AuthTokenService],
 })
 export class AuthModule {}

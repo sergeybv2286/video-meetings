@@ -14,6 +14,10 @@ export default defineConfig({
       DATABASE_URL: TEST_DATABASE_URL,
       FILES_STORAGE_DIR: TEST_STORAGE_DIR,
       AVATARS_STORAGE_DIR: TEST_AVATARS_DIR,
+      // Тесты регистрируются и входят десятки раз с одного IP.
+      AUTH_RATE_LIMIT: '100000',
+      RATE_LIMIT: '100000',
+      TRANSCRIPTION_RETRY_RATE_LIMIT: '5',
     },
     // Все файлы работают с одной БД, поэтому запускаем их последовательно.
     fileParallelism: false,

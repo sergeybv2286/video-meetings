@@ -7,17 +7,21 @@ import {
 import { createReadStream } from 'node:fs';
 import { rm, stat } from 'node:fs/promises';
 import type { ReadStream } from 'node:fs';
-import { Prisma } from '../generated/prisma/client.js';
+import { Prisma, type MeetingFile } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { resolveStoragePath } from './meeting-file.config.js';
 import type { StoredFileInfo } from './meeting-file.storage.js';
 import { toMeetingFileDto, type MeetingFileDto } from './meeting-files.dto.js';
+import { TranscriptionQueue } from './transcription/transcription-queue.js';
 
 @Injectable()
 export class MeetingFilesService {
   private readonly logger = new Logger(MeetingFilesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly transcriptions: TranscriptionQueue,
+  ) {}
 
   /** Сохраняет метаданные уже записанного на диск файла. */
   async create(
@@ -34,7 +38,7 @@ export class MeetingFilesService {
           storageKey: file.storageKey,
         },
       });
-      return toMeetingFileDto(created);
+      return await this.withTranscription(created);
     } catch (error) {
       await this.removeFromDisk(file.storageKey);
       if (
@@ -93,15 +97,16 @@ export class MeetingFilesService {
       where: { id: previous.id },
     });
     await this.removeFromDisk(previous.storageKey);
-    return toMeetingFileDto(updated);
+    return this.withTranscription(updated);
   }
 
   async findByMeeting(meetingId: string): Promise<MeetingFileDto> {
     const file = await this.prisma.meetingFile.findUnique({
       where: { meetingId },
+      include: { transcription: { select: { status: true } } },
     });
     if (!file) throw new NotFoundException('Файл не найден');
-    return toMeetingFileDto(file);
+    return toMeetingFileDto(file, file.transcription?.status ?? null);
   }
 
   /** Открывает файл на чтение; 404, если записи нет или файл пропал с диска. */
@@ -148,12 +153,38 @@ export class MeetingFilesService {
       }
       throw error;
     }
+    // Запись транскрибации ушла каскадом; прерываем идущий процесс, результат не запишется.
+    this.transcriptions.cancel(file.id);
     await this.removeFromDisk(file.storageKey);
   }
 
   async exists(meetingId: string): Promise<boolean> {
     const count = await this.prisma.meetingFile.count({ where: { meetingId } });
     return count > 0;
+  }
+
+  /**
+   * Ставит MP4/MP3 в очередь транскрибации. Сбой постановки не отменяет загрузку:
+   * файл уже сохранён, а статуса транскрибации просто не будет.
+   */
+  private async withTranscription(file: MeetingFile): Promise<MeetingFileDto> {
+    try {
+      return toMeetingFileDto(file, await this.transcriptions.enqueue(file));
+    } catch (error) {
+      this.logger.error(
+        `Не удалось поставить в очередь файл ${file.id}`,
+        error,
+      );
+      // Прежний результат относился к старому файлу: лучше без него, чем с чужим текстом.
+      try {
+        await this.prisma.meetingFileTranscription.deleteMany({
+          where: { meetingFileId: file.id },
+        });
+      } catch {
+        // БД недоступна — остаток подчистит следующая постановка.
+      }
+      return toMeetingFileDto(file);
+    }
   }
 
   /** Сбой удаления не должен перекрывать исходную ошибку; остаток подчистит очистка сирот. */

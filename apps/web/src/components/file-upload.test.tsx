@@ -28,6 +28,7 @@ const uploaded: MeetingFile = {
   size: 10,
   status: 'UPLOADED',
   uploadedAt: '2026-10-14T10:00:00.000Z',
+  transcriptionStatus: null,
 };
 
 function setup(props: Partial<Parameters<typeof FileUpload>[0]> = {}) {

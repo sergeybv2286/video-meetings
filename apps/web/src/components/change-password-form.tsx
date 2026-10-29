@@ -10,11 +10,12 @@ import {
   TextField,
 } from '@heroui/react';
 import { api, ApiError } from '@/lib/api';
+import { saveSession } from '@/lib/session';
 
 const MIN_PASSWORD_LENGTH = 6;
 const PASSWORD_TOO_SHORT = `Новый пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов`;
 
-/** Форма смены пароля (`PUT /users/me/password`). Сессия (токен) сохраняется. */
+/** Форма смены пароля (`PUT /users/me/password`). Сервер отзывает старые токены и выдаёт новый — он заменяет сессию. */
 export function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -34,7 +35,8 @@ export function ChangePasswordForm() {
     setError(null);
     setPending(true);
     try {
-      await api.changePassword(currentPassword, newPassword);
+      const result = await api.changePassword(currentPassword, newPassword);
+      saveSession({ token: result.accessToken, email: result.user.email });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Что-то пошло не так');
       setPending(false);

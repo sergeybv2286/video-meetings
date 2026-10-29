@@ -23,6 +23,7 @@ import {
 } from './meeting-file.storage.js';
 import { attachmentDisposition } from './content-disposition.js';
 import { MAX_FILE_SIZE_CAP } from './meeting-file.types.js';
+import { MeetingFileQuotaGuard } from './meeting-file-quota.guard.js';
 import { MeetingFileSizeGuard } from './meeting-file-size.guard.js';
 import { MeetingFileUploadFilter } from './meeting-file-upload.filter.js';
 import { MeetingFileAbsentGuard } from './meeting-file-absent.guard.js';
@@ -44,7 +45,11 @@ export class MeetingFilesController {
   constructor(private readonly files: MeetingFilesService) {}
 
   @Post()
-  @UseGuards(MeetingFileAbsentGuard, MeetingFileSizeGuard)
+  @UseGuards(
+    MeetingFileAbsentGuard,
+    MeetingFileSizeGuard,
+    MeetingFileQuotaGuard,
+  )
   @UseFilters(MeetingFileUploadFilter)
   @UseInterceptors(FileInterceptor('file', fileUploadOptions()))
   upload(
@@ -56,7 +61,7 @@ export class MeetingFilesController {
   }
 
   @Put()
-  @UseGuards(MeetingFileSizeGuard)
+  @UseGuards(MeetingFileSizeGuard, MeetingFileQuotaGuard)
   @UseFilters(MeetingFileUploadFilter)
   @UseInterceptors(FileInterceptor('file', fileUploadOptions()))
   replace(

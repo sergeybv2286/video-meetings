@@ -37,3 +37,4 @@ apps/api/storage
 
 # Счётчик итераций Ralph Loop
 .claude/ralph.iterations.json
+.claude/ralph.lock

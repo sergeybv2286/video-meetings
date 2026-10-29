@@ -25,9 +25,18 @@ export interface UserProfile {
 
 type UserWithAvatar = User & { avatar: { updatedAt: Date } | null };
 
+/** Профиль для других пользователей: без email и прочих личных данных. */
+export interface PublicProfile {
+  id: string;
+  name: string | null;
+  hasAvatar: boolean;
+  avatarUpdatedAt: Date | null;
+}
+
 const WITH_AVATAR = { avatar: { select: { updatedAt: true } } } as const;
 
 const SEARCH_LIMIT = 20;
+const MIN_SEARCH_LENGTH = 3;
 
 export function toProfile(user: UserWithAvatar): UserProfile {
   const { id, email, name, createdAt, avatar } = user;
@@ -36,6 +45,16 @@ export function toProfile(user: UserWithAvatar): UserProfile {
     email,
     name,
     createdAt,
+    hasAvatar: avatar !== null,
+    avatarUpdatedAt: avatar?.updatedAt ?? null,
+  };
+}
+
+export function toPublicProfile(user: UserWithAvatar): PublicProfile {
+  const { id, name, avatar } = user;
+  return {
+    id,
+    name,
     hasAvatar: avatar !== null,
     avatarUpdatedAt: avatar?.updatedAt ?? null,
   };
@@ -67,28 +86,55 @@ export class UsersService {
     return toProfile(user);
   }
 
-  /** Поиск по части email или имени (без учёта регистра), для приглашения участников. */
-  async search(query?: string): Promise<UserProfile[]> {
-    const term = query?.trim();
-    const users = await this.prisma.user.findMany({
-      where: term
-        ? {
-            OR: [
-              { email: { contains: term, mode: 'insensitive' } },
-              { name: { contains: term, mode: 'insensitive' } },
-            ],
-          }
-        : undefined,
+  /** Профиль другого пользователя: только публичные поля. */
+  async getPublicProfile(id: string): Promise<PublicProfile> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
       include: WITH_AVATAR,
-      orderBy: { email: 'asc' },
+    });
+    if (!user) throw new NotFoundException('Пользователь не найден');
+    return toPublicProfile(user);
+  }
+
+  /**
+   * Поиск для приглашения участников: по части имени или по точному email (без учёта регистра).
+   * Частичное совпадение по email не допускается — иначе по ответам можно подбирать чужие адреса.
+   */
+  async search(query: string): Promise<PublicProfile[]> {
+    const term = query.trim();
+    if (term.length < MIN_SEARCH_LENGTH) return [];
+    const users = await this.prisma.user.findMany({
+      where: {
+        OR: [
+          { email: normalize(term) },
+          { name: { contains: term, mode: 'insensitive' } },
+        ],
+      },
+      include: WITH_AVATAR,
+      orderBy: { createdAt: 'asc' },
       take: SEARCH_LIMIT,
     });
-    return users.map(toProfile);
+    return users.map(toPublicProfile);
   }
 
   async updateProfile(id: string, dto: UpdateProfileDto): Promise<UserProfile> {
     const data: Prisma.UserUpdateInput = {};
-    if (dto.email !== undefined) data.email = normalize(dto.email);
+    if (dto.email !== undefined) {
+      const current = await this.getOrFail(id);
+      const email = normalize(dto.email);
+      if (email !== current.email) {
+        // Смена email без пароля позволила бы навсегда перехватить аккаунт по украденному токену.
+        if (
+          !dto.password ||
+          !(await verifyPassword(dto.password, current.passwordHash))
+        ) {
+          throw new BadRequestException(
+            'Для смены email введите текущий пароль',
+          );
+        }
+        data.email = email;
+      }
+    }
     if (dto.name !== undefined) data.name = dto.name.trim() || null;
     try {
       return toProfile(
@@ -107,20 +153,24 @@ export class UsersService {
     id: string,
     currentPassword: string,
     newPassword: string,
-  ): Promise<void> {
+  ): Promise<User> {
     const user = await this.getOrFail(id);
-    if (!verifyPassword(currentPassword, user.passwordHash)) {
+    if (!(await verifyPassword(currentPassword, user.passwordHash))) {
       throw new BadRequestException('Неверный текущий пароль');
     }
-    await this.prisma.user.update({
+    // Рост версии отзывает все ранее выданные токены (в том числе украденные).
+    return this.prisma.user.update({
       where: { id },
-      data: { passwordHash: hashPassword(newPassword) },
+      data: {
+        passwordHash: await hashPassword(newPassword),
+        tokenVersion: { increment: 1 },
+      },
     });
   }
 
   async remove(id: string, password: string): Promise<void> {
     const user = await this.getOrFail(id);
-    if (!verifyPassword(password, user.passwordHash)) {
+    if (!(await verifyPassword(password, user.passwordHash))) {
       throw new BadRequestException('Неверный пароль');
     }
     const avatar = await this.prisma.userAvatar.findUnique({

@@ -8,11 +8,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
+import { Throttle } from '@nestjs/throttler';
 import { RegisterUserCommand } from './commands/register-user.command.js';
 import { LoginQuery } from './queries/login.query.js';
 import type { AuthResult } from './auth-token.service.js';
 import { CredentialsDto } from './auth.dto.js';
 import { JwtAuthGuard, type AuthRequest } from './jwt-auth.guard.js';
+import { AUTH_THROTTLE } from './rate-limit.js';
 
 @Controller('auth')
 export class AuthController {
@@ -22,6 +24,7 @@ export class AuthController {
   ) {}
 
   @Post('register')
+  @Throttle(AUTH_THROTTLE)
   register(@Body() dto: CredentialsDto) {
     return this.commandBus.execute<RegisterUserCommand, AuthResult>(
       new RegisterUserCommand(dto.email, dto.password),
@@ -29,6 +32,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(200)
   login(@Body() dto: CredentialsDto) {
     return this.queryBus.execute<LoginQuery, AuthResult>(

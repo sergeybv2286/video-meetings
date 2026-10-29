@@ -9,6 +9,9 @@ import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
 import { setupApp } from './../src/setup-app.js';
+import { TranscriptionQueue } from './../src/meeting-files/transcription/transcription-queue.js';
+import { TranscriptionRunner } from './../src/meeting-files/transcription/transcription-runner.js';
+import { FakeTranscriptionRunner } from './fake-transcription-runner.js';
 import { mp4M4vBrand, samples } from './sample-files.js';
 import { TEST_STORAGE_DIR } from './test-storage.js';
 
@@ -41,7 +44,10 @@ describe('Meeting files (e2e)', () => {
     await mkdir(TEST_STORAGE_DIR, { recursive: true });
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(TranscriptionRunner)
+      .useValue(new FakeTranscriptionRunner())
+      .compile();
     app = moduleRef.createNestApplication();
     setupApp(app);
     await app.init();
@@ -60,6 +66,7 @@ describe('Meeting files (e2e)', () => {
 
   afterEach(async () => {
     delete process.env.MEETING_FILE_MAX_SIZE;
+    await app.get(TranscriptionQueue).onIdle();
     await app.close();
   });
 
@@ -303,7 +310,11 @@ describe('Meeting files (e2e)', () => {
         .set(auth)
         .expect(200);
 
-      expect(body).toEqual(uploaded.body);
+      // Статус транскрибации успевает измениться между запросами.
+      expect({ ...body, transcriptionStatus: null }).toEqual({
+        ...uploaded.body,
+        transcriptionStatus: null,
+      });
       expect(body.status).toBe('UPLOADED');
     });
 
@@ -658,7 +669,10 @@ describe('Meeting files (e2e)', () => {
 
       const restarted = await Test.createTestingModule({
         imports: [AppModule],
-      }).compile();
+      })
+        .overrideProvider(TranscriptionRunner)
+        .useValue(new FakeTranscriptionRunner())
+        .compile();
       const restartedApp = restarted.createNestApplication();
       setupApp(restartedApp);
       await restartedApp.init();

@@ -8,12 +8,14 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
+  id           String      @id @default(uuid()) @db.Uuid
+  email        String      @unique
   name         String?
-  passwordHash String   @map("password_hash")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  passwordHash String      @map("password_hash")
+  /// Растёт при смене пароля: выданные ранее токены перестают действовать.
+  tokenVersion Int         @default(0) @map("token_version")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
   avatar       UserAvatar?
 
   @@map("users")
@@ -38,14 +40,38 @@ enum MeetingFileStatus {
 }
 
 model MeetingFile {
-  id           String            @id @default(uuid()) @db.Uuid
-  meetingId    String            @unique @map("meeting_id") @db.Uuid
-  originalName String            @map("original_name")
-  mimeType     String            @map("mime_type")
-  size         Int
-  status       MeetingFileStatus @default(UPLOADED)
-  storageKey   String            @map("storage_key")
-  uploadedAt   DateTime          @default(now()) @map("uploaded_at")
+  id            String                    @id @default(uuid()) @db.Uuid
+  meetingId     String                    @unique @map("meeting_id") @db.Uuid
+  originalName  String                    @map("original_name")
+  mimeType      String                    @map("mime_type")
+  size          Int
+  status        MeetingFileStatus         @default(UPLOADED)
+  storageKey    String                    @map("storage_key")
+  uploadedAt    DateTime                  @default(now()) @map("uploaded_at")
+  transcription MeetingFileTranscription?
 
   @@map("meeting_files")
+}
+
+enum TranscriptionStatus {
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+
+  @@map("transcription_status")
+}
+
+model MeetingFileTranscription {
+  id            String              @id @default(uuid()) @db.Uuid
+  meetingFileId String              @unique @map("meeting_file_id") @db.Uuid
+  meetingFile   MeetingFile         @relation(fields: [meetingFileId], references: [id], onDelete: Cascade)
+  status        TranscriptionStatus @default(QUEUED)
+  text          String?
+  error         String?
+  completedAt   DateTime?           @map("completed_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  @@map("meeting_file_transcriptions")
 }

@@ -5,56 +5,48 @@
 - `apps/web` — Next.js (App Router, Tailwind, HeroUI), порт 3000. См. `apps/web/CLAUDE.md`.
 - `apps/api` — NestJS 12 (ESM), порт 3001. См. `apps/api/CLAUDE.md`.
 
-## Команды (из корня)
+## Первый запуск
 
-- `pnpm dev` — web и api параллельно; `dev:web`, `dev:api` — по отдельности
-- `pnpm build` (`build:web`, `build:api`)
-- `pnpm lint` — ESLint в web, oxlint в api
-- `pnpm typecheck`, `pnpm test` (только unit-тесты пакетов: vitest в api и web)
-- `pnpm --filter api test:e2e` — e2e API; требует запущенный Postgres (`docker compose up -d`), использует отдельную БД `video_meetings_test`
-- `docker compose up -d` — Postgres 17 (`docker-compose.yml`, порт 5432, том `postgres_data`); параметры — `POSTGRES_*` в `.env` (см. `.env.example`), `docker compose down -v` удаляет данные
-- `pnpm format` / `pnpm format:check` — Prettier для всего репозитория
-- Команда для одного пакета: `pnpm --filter web <script>` / `pnpm --filter api <script>`
+`pnpm install` → `cp .env.example .env` (необязательно, есть значения по умолчанию) → `docker compose up -d` → `pnpm --filter api db:deploy` → `pnpm dev`.
 
-## Скиллы
+## Команды
 
-- Исходники скиллов лежат в `.agents/skills/` (список — в `skills-lock.json`), а Claude Code читает их из `.claude/skills/` через симлинки на `.agents/skills/<имя>`.
-- При установке нового скилла добавьте симлинк: `ln -s ../../.agents/skills/<имя> .claude/skills/<имя>`. После этого перезапустите сессию Claude Code.
+Все скрипты — в корневом `package.json` и `apps/*/package.json`; для одного пакета: `pnpm --filter <web|api> <script>`.
 
-## MCP
-
-- `.mcp.json` (в git) — MCP-серверы проекта. Подключён `playwright` (`npx @playwright/mcp@latest`): управление браузером для проверки веб-интерфейса. При первом запуске Claude Code попросит подтвердить сервер; после добавления перезапустите сессию.
+- `pnpm test` — только unit-тесты. E2E API: `pnpm --filter api test:e2e`, нужен Postgres (`docker compose up -d`), использует отдельную БД `video_meetings_test`.
+- `docker compose up -d` — Postgres 17 (порт 5432, параметры `POSTGRES_*` в `.env`); `docker compose down -v` удаляет данные.
+- Prisma (в `apps/api`): после правки `schema.prisma` — `pnpm --filter api db:migrate -- --name <имя>`; применить готовые миграции — `db:deploy`. Клиент генерируется в `postinstall` и в git не хранится.
+- Переменные окружения — в `.env.example` и `apps/api/CLAUDE.md`.
 
 ## Соглашения
 
-- Единый Prettier-конфиг в корне (`singleQuote`, `trailingComma: all`). Перед завершением работы запускайте `pnpm format`, `pnpm lint` и `pnpm typecheck`.
-- Git-хук Husky (`.husky/pre-commit`) на каждый коммит запускает `pnpm lint` и `pnpm test`; хуки ставятся скриптом `prepare` при `pnpm install`.
-- Автоформатирование: хук `PostToolUse` в `.claude/settings.json` запускает `prettier --write` на каждом файле после `Write`/`Edit` (учитывает `.prettierignore`). Если файл изменился после правки, перечитайте его перед следующим `Edit`.
+- Единый Prettier-конфиг в корне (`singleQuote`, `trailingComma: all`). Перед завершением работы запускайте `pnpm lint` и `pnpm typecheck`.
+- Husky (`.husky/pre-commit`) на каждый коммит запускает `pnpm lint` и `pnpm test`; хуки ставятся скриптом `prepare` при `pnpm install`.
+- Хук `PostToolUse` в `.claude/settings.json` запускает `prettier --write` на файле после `Write`/`Edit` (учитывает `.prettierignore`). Если файл изменился после правки, перечитайте его перед следующим `Edit`.
 - Зависимости добавляйте в конкретный пакет: `pnpm --filter <web|api> add <pkg>`. В корне только общие dev-инструменты.
 - Язык интерфейса и сообщений об ошибках — русский.
 - Секреты и `.env*` не коммитим (кроме `.env.example`).
+- Скиллы: исходники в `.agents/skills/` (список — `skills-lock.json`), Claude Code читает их из `.claude/skills/` через симлинки. Новый скилл: `ln -s ../../.agents/skills/<имя> .claude/skills/<имя>` и перезапуск сессии.
+- MCP: `.mcp.json` (в git), подключён `playwright` для проверки веб-интерфейса; при первом запуске подтвердите сервер.
 
-## Актуальность документации
+## Экономия токенов
 
-При любом изменении проекта обновляйте документацию в той же правке, не откладывая. Это касается `CLAUDE.md` (корневого и в `apps/*`) и `README.md`.
+- `git diff` всегда с `--unified=0`
+- `git log` всегда с `--oneline -10`
+- `gh issue list` всегда с `--json number,title`
+- `pnpm test` всегда с `--silent`
+- `pnpm typecheck` и `pnpm lint` всегда с `2>&1 | tail -20`
+- Большие файлы читайте частями (`offset`/`limit`), а `apps/api/CLAUDE.md` и `apps/web/CLAUDE.md` — только нужным разделом.
 
-Обновлять нужно, когда меняются:
+## Документация
 
-- команды и скрипты (`package.json`), порты, переменные окружения (и `.env.example`);
-- структура папок, страницы, модули, эндпоинты API;
-- используемые библиотеки, линтеры и инструменты;
-- соглашения и правила кода;
-- раздел «Текущее состояние» ниже (например, при подключении БД).
-
-Устаревшие или неверные описания удаляйте. Перед завершением задачи сверьте документацию с фактическим состоянием кода.
+Меняя команды, env, структуру, страницы, эндпоинты, библиотеки или соглашения, обновляйте `CLAUDE.md` (корневой и в `apps/*`) и `README.md` в той же правке. Детали по модулям и эндпоинтам живут в `apps/*/CLAUDE.md`, в корень их не дублируйте. Устаревшее удаляйте.
 
 ## Текущее состояние
 
-- Реализованы регистрация, вход (JWT) и встречи (`POST /meetings` — title, date, participants[]; `GET /meetings`; `GET /meetings/:id` — 404, если нет или чужая); во всех ответах встречи есть `hasFile`.
-- Профиль пользователя: `/users/*` (просмотр, редактирование имени/email, смена пароля, удаление аккаунта, поиск); в ответах есть `hasAvatar` и `avatarUpdatedAt`.
-- Аватар (API): `PUT`/`DELETE /users/me/avatar`, `GET /users/:id/avatar` (JPEG/PNG/WebP до 5 МБ, тип по содержимому; файл в `AVATARS_STORAGE_DIR`, метаданные в `user_avatars`; чистится при замене, удалении и удалении аккаунта). Подробности — `apps/api/CLAUDE.md`.
-- Пользователи и метаданные файлов хранятся в Postgres через Prisma (`apps/api/prisma`), миграции в `apps/api/prisma/migrations`. Для работы API и e2e-тестов Postgres должен быть запущен (`docker compose up -d`).
-- Файл встречи: `POST`/`PUT`/`GET`/`DELETE /meetings/:id/file` и `GET /meetings/:id/file/download` (загрузка, замена, метаданные, удаление, скачивание; файл на диске в `FILES_STORAGE_DIR`, метаданные в таблице `meeting_files`); валидация типа по содержимому, лимит 500 МБ. Подробности — `apps/api/CLAUDE.md`.
-- Веб: страница встречи `/meetings/[id]` — загрузка файла (выбор и drag-and-drop, клиентская проверка типа/размера, прогресс, ошибка с повтором), карточка файла со скачиванием, заменой и удалением (с подтверждением); в списке встреч метка «Есть файл». Подробности — `apps/web/CLAUDE.md`.
-- Веб: страницы `/profile` (аватар или заглушка с инициалами, имя, email) и `/profile/edit` (форма имени и email, ошибка 409 на русском); в шапке главной — аватар (или заглушка с инициалами), имя и ссылка на профиль, данные обновляются после сохранения без повторного входа. На `/profile/edit` также смена пароля (старый и новый пароль, сессия сохраняется) и удаление аккаунта (модальное подтверждение паролем, затем выход на `/login`); блок аватара (загрузка, замена, удаление) на `/profile/edit`, изображение показывается в шапке и профиле и обновляется сразу. Подробности — `apps/web/CLAUDE.md`.
-- Встречи хранятся в памяти API, данные теряются при перезапуске. Поэтому при старте API удаляет записи и файлы без встречи (очистка сирот); файлы не переживают перезапуск, пока встречи не перенесены в БД. При переносе встреч в БД очистку (`MeetingFilesCleanupService`) нужно пересмотреть, иначе она удалит все файлы.
+- Реализовано: регистрация и вход (JWT), встречи, профиль пользователя, аватар, файл встречи, транскрибация MP3/MP4 локальным Whisper (API и страница встречи). Данные пользователей и метаданные файлов — в Postgres (Prisma), сами файлы — на диске.
+- Подробности по эндпоинтам и страницам — в `apps/api/CLAUDE.md` и `apps/web/CLAUDE.md`.
+
+## Ловушки
+
+- **Встречи хранятся в памяти API** и теряются при перезапуске. Поэтому при старте `MeetingFilesCleanupService` удаляет записи и файлы без встречи. При переносе встреч в БД эту очистку нужно пересмотреть, иначе она удалит все файлы.

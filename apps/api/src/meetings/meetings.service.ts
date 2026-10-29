@@ -1,5 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+
+/** Предел числа встреч на пользователя: встречи пока хранятся в памяти процесса. */
+export const MAX_MEETINGS_PER_USER = 1000;
 
 export interface Meeting {
   id: string;
@@ -28,6 +31,11 @@ export class MeetingsService {
     );
   }
 
+  private countByOwner(ownerId: string): number {
+    return this.meetings.filter((meeting) => meeting.ownerId === ownerId)
+      .length;
+  }
+
   /** Есть ли встреча (у любого владельца). */
   exists(id: string): boolean {
     return this.meetings.some((meeting) => meeting.id === id);
@@ -37,6 +45,11 @@ export class MeetingsService {
     ownerId: string,
     input: { title: string; date?: string; participants?: string[] },
   ): Meeting {
+    if (this.countByOwner(ownerId) >= MAX_MEETINGS_PER_USER) {
+      throw new ForbiddenException(
+        `Достигнут лимит встреч — ${MAX_MEETINGS_PER_USER}`,
+      );
+    }
     const createdAt = new Date().toISOString();
     const meeting: Meeting = {
       id: randomUUID(),

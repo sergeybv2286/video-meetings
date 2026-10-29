@@ -84,6 +84,21 @@ describe('meeting-file.validator', () => {
     ]);
   });
 
+  it('listZipEntries отклоняет заголовок с огромным центральным каталогом', async () => {
+    const cdSize = 2 * 1024 * 1024;
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0);
+    eocd.writeUInt16LE(1, 10);
+    eocd.writeUInt32LE(cdSize, 12);
+    eocd.writeUInt32LE(0, 16);
+    const file = path.join(dir, 'bomb.docx');
+    await writeFile(file, Buffer.concat([Buffer.alloc(cdSize), eocd]));
+
+    await expect(listZipEntries(file)).rejects.toBeInstanceOf(
+      UnsupportedMediaTypeException,
+    );
+  });
+
   it('sanitizeFileName убирает пути и управляющие символы', () => {
     expect(sanitizeFileName('../../etc/passwd.mp4')).toBe('passwd.mp4');
     expect(sanitizeFileName('C:\\a\\b.mp4')).toBe('b.mp4');

@@ -7,6 +7,7 @@ import { Alert, Skeleton } from '@heroui/react';
 import { AppTitle } from '@/components/app-title';
 import { FileSection } from '@/components/file-section';
 import { FileUpload } from '@/components/file-upload';
+import { TranscriptionSection } from '@/components/transcription-section';
 import { api, ApiError, type Meeting, type MeetingFile } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
@@ -122,11 +123,18 @@ function MeetingView({ id }: { id: string }) {
             </time>
           </header>
           {state.file ? (
-            <FileSection
-              file={state.file}
-              onReplaced={(file) => setFile(file)}
-              onDeleted={() => setFile(null)}
-            />
+            <>
+              <FileSection
+                file={state.file}
+                onReplaced={(file) => setFile(file)}
+                onDeleted={() => setFile(null)}
+              />
+              {/* key: после замены файла состояние и опрос начинаются заново. */}
+              <TranscriptionSection
+                key={`${state.file.id}:${state.file.uploadedAt}`}
+                file={state.file}
+              />
+            </>
           ) : (
             <FileUpload
               meetingId={state.meeting.id}

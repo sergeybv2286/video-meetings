@@ -23,9 +23,15 @@ export function ProfileForm({ profile, onSaved }: Props) {
   // Контролируемые поля: после сохранения показываем то, что вернул сервер (trim, нижний регистр).
   const [name, setName] = useState(profile.name ?? '');
   const [email, setEmail] = useState(profile.email);
+  const [password, setPassword] = useState('');
+  // Email, как он сохранён на сервере: смена email подтверждается паролем.
+  const [savedEmail, setSavedEmail] = useState(profile.email);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const emailChanged =
+    email.trim().toLowerCase() !== savedEmail.trim().toLowerCase();
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,7 +42,11 @@ export function ProfileForm({ profile, onSaved }: Props) {
     setPending(true);
     let result: UserProfile;
     try {
-      result = await api.updateMe({ name, email });
+      result = await api.updateMe({
+        name,
+        email,
+        ...(emailChanged && { password }),
+      });
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) setError(EMAIL_TAKEN);
       else setError(e instanceof ApiError ? e.message : 'Что-то пошло не так');
@@ -45,6 +55,8 @@ export function ProfileForm({ profile, onSaved }: Props) {
     }
     setName(result.name ?? '');
     setEmail(result.email);
+    setSavedEmail(result.email);
+    setPassword('');
     setSaved(true);
     setPending(false);
     // Вне try: сбой в onSaved не должен выглядеть как неудачное сохранение.
@@ -89,6 +101,25 @@ export function ProfileForm({ profile, onSaved }: Props) {
         <Input />
         <FieldError />
       </TextField>
+
+      {emailChanged && (
+        <TextField
+          name="password"
+          type="password"
+          value={password}
+          onChange={(value) => {
+            setPassword(value);
+            setSaved(false);
+          }}
+          isRequired
+          isDisabled={pending}
+          autoComplete="current-password"
+        >
+          <Label>Текущий пароль (для смены email)</Label>
+          <Input />
+          <FieldError />
+        </TextField>
+      )}
 
       {error && (
         <p role="alert" className="text-sm text-danger">

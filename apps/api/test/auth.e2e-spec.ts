@@ -48,12 +48,13 @@ describe('Auth (e2e)', () => {
       expect(res.body).not.toHaveProperty('password');
     });
 
-    it('кладёт id и email пользователя в payload токена', async () => {
+    it('кладёт id пользователя и версию токенов в payload, без email', async () => {
       const { body } = await register().expect(201);
 
       const payload = decodePayload(body.accessToken);
       expect(payload.sub).toBe(body.user.id);
-      expect(payload.email).toBe(creds.email);
+      expect(payload.tv).toBe(0);
+      expect(payload).not.toHaveProperty('email');
     });
 
     it('приводит email к нижнему регистру', async () => {
@@ -174,6 +175,29 @@ describe('Auth (e2e)', () => {
 
     it('GET /auth/me без токена возвращает 401', async () => {
       await request(app.getHttpServer()).get('/auth/me').expect(401);
+    });
+
+    it('токен удалённого пользователя возвращает 401', async () => {
+      const { body } = await register();
+      await app.get(PrismaService).user.deleteMany();
+
+      await request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${body.accessToken}`)
+        .expect(401);
+    });
+
+    it('токен с чужим алгоритмом подписи возвращает 401', async () => {
+      const { body } = await register();
+      const header = Buffer.from('{"alg":"none","typ":"JWT"}').toString(
+        'base64url',
+      );
+      const [, payload] = body.accessToken.split('.');
+
+      await request(app.getHttpServer())
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${header}.${payload}.`)
+        .expect(401);
     });
 
     it('GET /auth/me с поддельным токеном возвращает 401', async () => {
