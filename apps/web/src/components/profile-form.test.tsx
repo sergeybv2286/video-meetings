@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProfileForm } from './profile-form';
 import { api, ApiError, type UserProfile } from '@/lib/api';
 
+const PASSWORD_LABEL = 'Текущий пароль (для смены email)';
+
 vi.mock('@/lib/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/api')>();
   return { ...original, api: { ...original.api, updateMe: vi.fn() } };
@@ -43,14 +45,33 @@ describe('форма имени и email', () => {
     await user.type(screen.getByLabelText('Имя'), 'Пётр');
     await user.clear(screen.getByLabelText('Email'));
     await user.type(screen.getByLabelText('Email'), 'petr@example.com');
+    await user.type(screen.getByLabelText(PASSWORD_LABEL), 'secret123');
     await user.click(screen.getByRole('button', { name: 'Сохранить' }));
 
     expect(api.updateMe).toHaveBeenCalledWith({
       name: 'Пётр',
       email: 'petr@example.com',
+      password: 'secret123',
     });
     expect(await screen.findByText('Изменения сохранены')).toBeInTheDocument();
     expect(onSaved).toHaveBeenCalledWith(saved);
+  });
+
+  it('поле пароля появляется только при смене email и без него пароль не отправляется', async () => {
+    const { user } = setup();
+    vi.mocked(api.updateMe).mockResolvedValue(profile);
+    expect(screen.queryByLabelText(PASSWORD_LABEL)).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Email'), 'x');
+    expect(screen.getByLabelText(PASSWORD_LABEL)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Email'), '{Backspace}');
+    expect(screen.queryByLabelText(PASSWORD_LABEL)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(api.updateMe).toHaveBeenCalledWith({
+      name: 'Иван Петров',
+      email: 'ivan@example.com',
+    });
   });
 
   it('очистка имени отправляет пустую строку (сброс имени)', async () => {
@@ -77,6 +98,7 @@ describe('форма имени и email', () => {
 
     await user.clear(screen.getByLabelText('Email'));
     await user.type(screen.getByLabelText('Email'), 'busy@example.com');
+    await user.type(screen.getByLabelText(PASSWORD_LABEL), 'secret123');
     await user.click(screen.getByRole('button', { name: 'Сохранить' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -145,6 +167,7 @@ describe('форма имени и email', () => {
     await user.type(screen.getByLabelText('Имя'), '   Иван   ');
     await user.clear(screen.getByLabelText('Email'));
     await user.type(screen.getByLabelText('Email'), 'USER@Example.com');
+    await user.type(screen.getByLabelText(PASSWORD_LABEL), 'secret123');
     await user.click(screen.getByRole('button', { name: 'Сохранить' }));
 
     await screen.findByText('Изменения сохранены');

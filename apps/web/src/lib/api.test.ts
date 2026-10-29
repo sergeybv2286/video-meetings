@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError, downloadMeetingFile, uploadMeetingFile } from './api';
+import {
+  api,
+  ApiError,
+  downloadMeetingFile,
+  downloadTranscription,
+  uploadMeetingFile,
+} from './api';
 import { getToken } from './session';
 
 vi.mock('./session', () => ({
@@ -310,5 +316,113 @@ describe('uploadMeetingFile', () => {
     await promise;
 
     expect(FakeXhr.last.headers.Authorization).toBeUndefined();
+  });
+});
+
+describe('транскрибация', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('getTranscription запрашивает статус и текст с токеном', async () => {
+    const body = {
+      status: 'DONE',
+      text: 'Привет',
+      error: null,
+      completedAt: null,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(body));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(api.getTranscription('m1')).resolves.toEqual(body);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://localhost:3001/meetings/m1/file/transcription',
+    );
+    expect(
+      new Headers(fetchMock.mock.calls[0][1].headers).get('Authorization'),
+    ).toBe('Bearer token-1');
+  });
+
+  it('retryTranscription шлёт POST на /retry', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({
+          status: 'QUEUED',
+          text: null,
+          error: null,
+          completedAt: null,
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api.retryTranscription('m1');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://localhost:3001/meetings/m1/file/transcription/retry',
+    );
+    expect(fetchMock.mock.calls[0][1].method).toBe('POST');
+  });
+
+  it('ошибка API приходит русским ApiError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          jsonResponse(
+            {
+              message:
+                'Повторить можно только транскрибацию со статусом «Ошибка»',
+            },
+            409,
+          ),
+        ),
+    );
+
+    await expect(api.retryTranscription('m1')).rejects.toMatchObject({
+      status: 409,
+      message: 'Повторить можно только транскрибацию со статусом «Ошибка»',
+    });
+  });
+
+  describe('downloadTranscription', () => {
+    it('скачивает .txt под именем исходного файла без расширения', async () => {
+      vi.stubGlobal('URL', {
+        createObjectURL: vi.fn(() => 'blob:txt'),
+        revokeObjectURL: vi.fn(),
+      });
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(
+        () => {},
+      );
+      const fetchMock = vi.fn().mockResolvedValue(new Response('текст'));
+      vi.stubGlobal('fetch', fetchMock);
+      const anchors: HTMLAnchorElement[] = [];
+      const append = document.body.append.bind(document.body);
+      vi.spyOn(document.body, 'append').mockImplementation((...nodes) => {
+        anchors.push(...(nodes as HTMLAnchorElement[]));
+        append(...nodes);
+      });
+
+      await downloadTranscription('m1', 'Итоги встречи.final.mp4');
+
+      expect(fetchMock.mock.calls[0][0]).toBe(
+        'http://localhost:3001/meetings/m1/file/transcription/download',
+      );
+      expect(anchors[0].download).toBe('Итоги встречи.final.txt');
+    });
+
+    it('обрыв при чтении тела → ApiError', async () => {
+      const response = new Response('x');
+      vi.spyOn(response, 'blob').mockRejectedValue(new TypeError('network'));
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+
+      await expect(downloadTranscription('m1', 'a.mp3')).rejects.toMatchObject({
+        status: 0,
+        message: expect.stringContaining('соединение прервано'),
+      });
+    });
   });
 });

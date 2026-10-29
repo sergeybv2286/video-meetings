@@ -6,6 +6,7 @@ import {
 import { readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { MeetingsService } from '../meetings/meetings.service.js';
+import { TranscriptionQueue } from './transcription/transcription-queue.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import {
   FILES_SUBDIR,
@@ -40,6 +41,7 @@ export class MeetingFilesCleanupService implements OnApplicationBootstrap {
   constructor(
     private readonly prisma: PrismaService,
     private readonly meetings: MeetingsService,
+    private readonly transcriptions: TranscriptionQueue,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -53,6 +55,15 @@ export class MeetingFilesCleanupService implements OnApplicationBootstrap {
     } catch (error) {
       // Сбой очистки не должен мешать запуску API.
       this.logger.error('Не удалось выполнить очистку файлов встреч', error);
+    }
+    // После очистки: задачи удалённых файлов уже снесены каскадом и не запустятся.
+    try {
+      const recovered = await this.transcriptions.recover();
+      if (recovered) {
+        this.logger.log(`Возобновлено транскрибаций: ${recovered}`);
+      }
+    } catch (error) {
+      this.logger.error('Не удалось возобновить транскрибацию', error);
     }
   }
 

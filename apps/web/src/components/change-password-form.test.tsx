@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ChangePasswordForm } from './change-password-form';
 import { api, ApiError } from '@/lib/api';
+import { getToken } from '@/lib/session';
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/api')>();
@@ -27,7 +28,10 @@ afterEach(() => {
 describe('форма смены пароля', () => {
   it('меняет пароль, показывает подтверждение и очищает поля', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.changePassword).mockResolvedValue(undefined);
+    vi.mocked(api.changePassword).mockResolvedValue({
+      accessToken: 'new-token',
+      user: { id: 'u1', email: 'a@example.com' },
+    });
     render(<ChangePasswordForm />);
 
     await fill(user, 'secret123', 'newsecret456');
@@ -37,6 +41,8 @@ describe('форма смены пароля', () => {
       'newsecret456',
     );
     expect(await screen.findByText('Пароль изменён')).toBeInTheDocument();
+    // Старые токены отозваны: новый токен заменяет сессию.
+    expect(getToken()).toBe('new-token');
     expect(screen.getByLabelText('Текущий пароль')).toHaveValue('');
     expect(screen.getByLabelText('Новый пароль')).toHaveValue('');
   });

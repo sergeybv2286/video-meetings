@@ -18,8 +18,8 @@ export class RegisterUserHandler implements ICommandHandler<
 
   async execute({ email, password }: RegisterUserCommand): Promise<AuthResult> {
     try {
-      const user = await this.users.create(email, hashPassword(password));
-      return await this.tokens.issue(user.id, user.email);
+      const user = await this.users.create(email, await hashPassword(password));
+      return await this.tokens.issue(user.id, user.email, user.tokenVersion);
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&

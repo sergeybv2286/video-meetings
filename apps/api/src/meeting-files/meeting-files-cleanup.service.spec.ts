@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { MeetingsService } from '../meetings/meetings.service.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { MeetingFilesCleanupService } from './meeting-files-cleanup.service.js';
+import type { TranscriptionQueue } from './transcription/transcription-queue.js';
 
 describe('MeetingFilesCleanupService', () => {
   let dir: string;
@@ -39,11 +40,14 @@ describe('MeetingFilesCleanupService', () => {
       });
     const prisma = { meetingFile: { findMany, deleteMany } };
     const meetings = { exists: (m: string) => liveMeetings.includes(m) };
+    const recover = vi.fn().mockResolvedValue(0);
     return {
       deleteMany,
+      recover,
       service: new MeetingFilesCleanupService(
         prisma as unknown as PrismaService,
         meetings as unknown as MeetingsService,
+        { recover } as unknown as TranscriptionQueue,
       ),
     };
   };
@@ -140,6 +144,7 @@ describe('MeetingFilesCleanupService', () => {
     const service = new MeetingFilesCleanupService(
       prisma as unknown as PrismaService,
       { exists: () => false } as unknown as MeetingsService,
+      { recover: vi.fn() } as unknown as TranscriptionQueue,
     );
 
     await expect(service.onApplicationBootstrap()).resolves.toBeUndefined();
@@ -153,5 +158,31 @@ describe('MeetingFilesCleanupService', () => {
 
     await expect(service.cleanup()).rejects.toThrow();
     await expect(service.onApplicationBootstrap()).resolves.toBeUndefined();
+  });
+
+  it('onApplicationBootstrap возобновляет транскрибацию после очистки', async () => {
+    const { service, deleteMany, recover } = makeService(
+      [{ id: 'r1', meetingId: 'm1', storageKey: `files/${id(1)}` }],
+      [],
+    );
+    recover.mockImplementation(() => {
+      // К моменту восстановления запись без встречи уже удалена.
+      expect(deleteMany).toHaveBeenCalledTimes(1);
+      return Promise.resolve(2);
+    });
+
+    await service.onApplicationBootstrap();
+
+    expect(recover).toHaveBeenCalledTimes(1);
+  });
+
+  it('сбой очистки не мешает возобновить транскрибацию, а сбой возобновления не падает', async () => {
+    await rm(path.join(dir, 'files'), { recursive: true });
+    await writeFile(path.join(dir, 'files'), 'x');
+    const { service, recover } = makeService([], []);
+    recover.mockRejectedValue(new Error('db down'));
+
+    await expect(service.onApplicationBootstrap()).resolves.toBeUndefined();
+    expect(recover).toHaveBeenCalledTimes(1);
   });
 });

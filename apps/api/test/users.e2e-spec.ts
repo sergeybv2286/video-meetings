@@ -93,12 +93,39 @@ describe('Users (e2e)', () => {
       const { body } = await http()
         .patch('/users/me')
         .set(auth)
-        .send({ name: '  Анна  ', email: 'New@Example.com' })
+        .send({
+          name: '  Анна  ',
+          email: 'New@Example.com',
+          password: 'secret123',
+        })
         .expect(200);
 
       expect(body).toMatchObject({ name: 'Анна', email: 'new@example.com' });
       const check = await http().get('/users/me').set(auth).expect(200);
       expect(check.body.email).toBe('new@example.com');
+    });
+
+    it('400, если email меняется без пароля или с неверным паролем', async () => {
+      await http()
+        .patch('/users/me')
+        .set(auth)
+        .send({ email: 'new@example.com' })
+        .expect(400);
+      await http()
+        .patch('/users/me')
+        .set(auth)
+        .send({ email: 'new@example.com', password: 'wrong-pass' })
+        .expect(400);
+      const check = await http().get('/users/me').set(auth).expect(200);
+      expect(check.body.email).toBe('a@example.com');
+    });
+
+    it('тот же email сохраняется без пароля', async () => {
+      await http()
+        .patch('/users/me')
+        .set(auth)
+        .send({ name: 'Анна', email: 'A@example.com' })
+        .expect(200);
     });
 
     it('пустое имя сбрасывает имя', async () => {
@@ -124,7 +151,7 @@ describe('Users (e2e)', () => {
       await http()
         .patch('/users/me')
         .set(auth)
-        .send({ email: 'b@example.com' })
+        .send({ email: 'b@example.com', password: 'secret123' })
         .expect(409);
     });
   });
@@ -135,7 +162,7 @@ describe('Users (e2e)', () => {
         .put('/users/me/password')
         .set(auth)
         .send({ currentPassword: 'secret123', newPassword: 'newsecret456' })
-        .expect(204);
+        .expect(200);
 
       await http()
         .post('/auth/login')
@@ -147,13 +174,18 @@ describe('Users (e2e)', () => {
         .expect(200);
     });
 
-    it('токен остаётся действительным после смены пароля', async () => {
-      await http()
+    it('старые токены отзываются, в ответе приходит новый рабочий токен', async () => {
+      const { body } = await http()
         .put('/users/me/password')
         .set(auth)
         .send({ currentPassword: 'secret123', newPassword: 'newsecret456' })
-        .expect(204);
-      await http().get('/users/me').set(auth).expect(200);
+        .expect(200);
+
+      await http().get('/users/me').set(auth).expect(401);
+      await http()
+        .get('/users/me')
+        .set({ Authorization: `Bearer ${body.accessToken}` })
+        .expect(200);
     });
 
     it('400 при неверном текущем пароле', async () => {
@@ -185,7 +217,8 @@ describe('Users (e2e)', () => {
         .post('/auth/login')
         .send({ email: 'a@example.com', password: 'secret123' })
         .expect(401);
-      await http().get('/users/me').set(auth).expect(404);
+      // Токен удалённого пользователя недействителен.
+      await http().get('/users/me').set(auth).expect(401);
     });
 
     it('удаляет файл аватара с диска вместе с аккаунтом', async () => {
@@ -243,13 +276,12 @@ describe('Users (e2e)', () => {
         .get(`/users/${b.user.id}`)
         .set(auth)
         .expect(200);
-      expect(body).toMatchObject({
+      expect(body).toEqual({
         id: b.user.id,
-        email: 'b@example.com',
+        name: null,
         hasAvatar: false,
         avatarUpdatedAt: null,
       });
-      expect(body).not.toHaveProperty('passwordHash');
     });
 
     it('404, если пользователя нет', async () => {
@@ -270,26 +302,31 @@ describe('Users (e2e)', () => {
       await register('boris@example.com');
     });
 
-    it('без параметра возвращает всех, отсортировано по email', async () => {
-      const { body } = await http().get('/users').set(auth).expect(200);
-      expect(body.map((u: { email: string }) => u.email)).toEqual([
-        'a@example.com',
-        'anna@example.com',
-        'boris@example.com',
-      ]);
+    it('400 без параметра или короче 3 символов', async () => {
+      await http().get('/users').set(auth).expect(400);
+      await http().get('/users').query({ search: 'bo' }).set(auth).expect(400);
     });
 
-    it('ищет по части email без учёта регистра', async () => {
+    it('находит по точному email без учёта регистра, без email в ответе', async () => {
       const { body } = await http()
         .get('/users')
-        .query({ search: 'BOR' })
+        .query({ search: 'BORIS@example.com' })
         .set(auth)
         .expect(200);
       expect(body).toHaveLength(1);
-      expect(body[0].email).toBe('boris@example.com');
+      expect(body[0]).not.toHaveProperty('email');
     });
 
-    it('ищет по имени', async () => {
+    it('часть email ничего не находит', async () => {
+      const { body } = await http()
+        .get('/users')
+        .query({ search: 'bor' })
+        .set(auth)
+        .expect(200);
+      expect(body).toEqual([]);
+    });
+
+    it('ищет по части имени', async () => {
       await http().patch('/users/me').set(auth).send({ name: 'Валентина' });
       const { body } = await http()
         .get('/users')

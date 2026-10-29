@@ -11,6 +11,8 @@ import {
 /** Сколько байт начала файла достаточно для первичной проверки сигнатуры. */
 export const PREFIX_BYTES = 4100;
 const TEXT_SCAN_BYTES = 64 * 1024;
+/** Предел центрального каталога zip: размер берётся из заголовка файла и не должен раздувать память. */
+const MAX_ZIP_DIRECTORY_BYTES = 1024 * 1024;
 
 const mismatch = () =>
   new UnsupportedMediaTypeException(
@@ -85,7 +87,9 @@ export async function listZipEntries(filePath: string): Promise<string[]> {
     const total = tail.readUInt16LE(eocd + 10);
     const cdSize = tail.readUInt32LE(eocd + 12);
     const cdOffset = tail.readUInt32LE(eocd + 16);
-    if (cdOffset + cdSize > size) throw mismatch();
+    if (cdOffset + cdSize > size || cdSize > MAX_ZIP_DIRECTORY_BYTES) {
+      throw mismatch();
+    }
     const cd = Buffer.alloc(cdSize);
     await handle.read(cd, 0, cdSize, cdOffset);
     const names: string[] = [];

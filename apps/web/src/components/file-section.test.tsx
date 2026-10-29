@@ -37,6 +37,7 @@ const file: MeetingFile = {
   size: 1536 * 1024,
   status: 'UPLOADED',
   uploadedAt: '2026-10-14T10:00:00.000Z',
+  transcriptionStatus: null,
 };
 
 function setup() {

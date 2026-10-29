@@ -76,6 +76,17 @@ export interface MeetingFile {
   size: number;
   status: 'UPLOADED';
   uploadedAt: string;
+  /** Статус транскрибации; `null` для файлов, кроме MP4/MP3. */
+  transcriptionStatus: TranscriptionStatus | null;
+}
+
+export type TranscriptionStatus = 'QUEUED' | 'PROCESSING' | 'DONE' | 'FAILED';
+
+export interface Transcription {
+  status: TranscriptionStatus;
+  text: string | null;
+  error: string | null;
+  completedAt: string | null;
 }
 
 function errorMessage(body: unknown): string {
@@ -194,6 +205,11 @@ export async function downloadMeetingFile(
     // Соединение оборвалось, пока читалось тело.
     throw new ApiError('Не удалось скачать файл: соединение прервано', 0);
   }
+  saveBlob(blob, fileName);
+}
+
+/** Отдаёт blob браузеру как скачивание. */
+function saveBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -204,6 +220,25 @@ export async function downloadMeetingFile(
   // Браузеру нужно время, чтобы начать сохранение, прежде чем освобождать blob.
   // Запас с учётом диалога «Сохранить как»: до выбора места blob должен жить.
   setTimeout(() => URL.revokeObjectURL(url), 5 * 60_000);
+}
+
+/** Скачивание текста транскрибации как `.txt` (имя — по исходному файлу, без расширения). */
+export async function downloadTranscription(
+  meetingId: string,
+  originalName: string,
+): Promise<void> {
+  const response = await send(
+    `/meetings/${meetingId}/file/transcription/download`,
+    {},
+  );
+  let blob: Blob;
+  try {
+    blob = await response.blob();
+  } catch {
+    throw new ApiError('Не удалось скачать текст: соединение прервано', 0);
+  }
+  const base = originalName.replace(/\.[^./\\]*$/, '') || 'transcription';
+  saveBlob(blob, `${base}.txt`);
 }
 
 export const api = {
@@ -228,14 +263,15 @@ export const api = {
     }
   },
   deleteAvatar: () => request<void>('/users/me/avatar', { method: 'DELETE' }),
-  /** Пустая строка в `name` сбрасывает имя. */
-  updateMe: (data: { name?: string; email?: string }) =>
+  /** Пустая строка в `name` сбрасывает имя; для смены `email` нужен текущий `password`. */
+  updateMe: (data: { name?: string; email?: string; password?: string }) =>
     request<UserProfile>('/users/me', {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
+  /** Старые токены после смены пароля отзываются, поэтому в ответе — новый токен. */
   changePassword: (currentPassword: string, newPassword: string) =>
-    request<void>('/users/me/password', {
+    request<AuthResult>('/users/me/password', {
       method: 'PUT',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
@@ -260,6 +296,12 @@ export const api = {
       throw e;
     }
   },
+  getTranscription: (id: string) =>
+    request<Transcription>(`/meetings/${id}/file/transcription`),
+  retryTranscription: (id: string) =>
+    request<Transcription>(`/meetings/${id}/file/transcription/retry`, {
+      method: 'POST',
+    }),
   createMeeting: (title: string) =>
     request<Meeting>('/meetings', {
       method: 'POST',

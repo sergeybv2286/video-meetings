@@ -169,9 +169,9 @@ describe('Avatars (e2e)', () => {
       .expect(404);
   });
 
-  it('PUT удалённого пользователя с живым токеном → 404, файл не остаётся', async () => {
+  it('PUT удалённого пользователя с живым токеном → 401, файл не остаётся', async () => {
     await prisma.user.delete({ where: { id: userId } });
-    await put(imageSamples.png()).expect(404);
+    await put(imageSamples.png()).expect(401);
     expect(await filesOnDisk()).toHaveLength(0);
   });
 

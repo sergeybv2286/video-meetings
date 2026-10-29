@@ -77,6 +77,10 @@ describe('страница редактирования профиля', () => {
     const email = await screen.findByLabelText('Email');
     await user.clear(email);
     await user.type(email, 'new@example.com');
+    await user.type(
+      screen.getByLabelText('Текущий пароль (для смены email)'),
+      'secret123',
+    );
     await user.click(screen.getByRole('button', { name: 'Сохранить' }));
 
     await waitFor(() =>
@@ -105,6 +109,10 @@ describe('страница редактирования профиля', () => {
     const email = await screen.findByLabelText('Email');
     await user.clear(email);
     await user.type(email, 'new@example.com');
+    await user.type(
+      screen.getByLabelText('Текущий пароль (для смены email)'),
+      'secret123',
+    );
     await user.click(screen.getByRole('button', { name: 'Сохранить' }));
 
     await screen.findByText('Изменения сохранены');

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { Prisma } from '../generated/prisma/client.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { MeetingFilesService } from './meeting-files.service.js';
+import type { TranscriptionQueue } from './transcription/transcription-queue.js';
 
 describe('MeetingFilesService', () => {
   let dir: string;
@@ -39,8 +40,19 @@ describe('MeetingFilesService', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  const enqueue = vi.fn();
+  const cancel = vi.fn();
+
   const makeService = (meetingFile: Record<string, unknown>) =>
-    new MeetingFilesService({ meetingFile } as unknown as PrismaService);
+    new MeetingFilesService(
+      { meetingFile } as unknown as PrismaService,
+      { enqueue, cancel } as unknown as TranscriptionQueue,
+    );
+
+  beforeEach(() => {
+    enqueue.mockReset().mockResolvedValue('QUEUED');
+    cancel.mockReset();
+  });
 
   it('create сохраняет метаданные и не отдаёт storageKey', async () => {
     const create = vi.fn().mockResolvedValue(row);
@@ -63,8 +75,19 @@ describe('MeetingFilesService', () => {
       size: 3,
       status: 'UPLOADED',
       uploadedAt: '2026-10-12T10:00:00.000Z',
+      transcriptionStatus: 'QUEUED',
     });
     expect(dto).not.toHaveProperty('storageKey');
+    expect(enqueue).toHaveBeenCalledWith(row);
+  });
+
+  it('create: сбой постановки в очередь не отменяет загрузку', async () => {
+    enqueue.mockRejectedValue(new Error('БД недоступна'));
+    const create = vi.fn().mockResolvedValue(row);
+    const dto = await makeService({ create }).create(meetingId, storedFile);
+
+    expect(dto.transcriptionStatus).toBeNull();
+    expect(await readdir(path.join(dir, 'files'))).toEqual(['abc']);
   });
 
   it('create: при дубликате (P2002) удаляет файл с диска и отдаёт 409', async () => {
@@ -104,11 +127,26 @@ describe('MeetingFilesService', () => {
   });
 
   it('findByMeeting возвращает метаданные', async () => {
-    const findUnique = vi.fn().mockResolvedValue(row);
+    const findUnique = vi
+      .fn()
+      .mockResolvedValue({ ...row, transcription: { status: 'DONE' } });
     const dto = await makeService({ findUnique }).findByMeeting(meetingId);
 
-    expect(findUnique).toHaveBeenCalledWith({ where: { meetingId } });
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { meetingId },
+      include: { transcription: { select: { status: true } } },
+    });
     expect(dto.originalName).toBe('запись.mp4');
+    expect(dto.transcriptionStatus).toBe('DONE');
+  });
+
+  it('findByMeeting: без транскрибации статус null', async () => {
+    const findUnique = vi
+      .fn()
+      .mockResolvedValue({ ...row, transcription: null });
+    const dto = await makeService({ findUnique }).findByMeeting(meetingId);
+
+    expect(dto.transcriptionStatus).toBeNull();
   });
 
   it('findByMeeting: 404, если файла нет', async () => {
@@ -219,6 +257,15 @@ describe('MeetingFilesService', () => {
         'abc',
         'other',
       ]);
+    });
+
+    it('прерывает транскрибацию при удалении файла', async () => {
+      const findUnique = vi.fn().mockResolvedValue(row);
+      const del = vi.fn().mockResolvedValue(row);
+
+      await makeService({ findUnique, delete: del }).remove(meetingId);
+
+      expect(cancel).toHaveBeenCalledWith(row.id);
     });
 
     it('сбой удаления старого файла не ломает замену', async () => {
